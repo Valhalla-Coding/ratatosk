@@ -1,5 +1,6 @@
 """A fake ComfyUI for tests: /queue, /free, /prompt, /system_stats and a /ws echo."""
 import asyncio
+import time
 from dataclasses import dataclass, field
 
 from aiohttp import WSMsgType, web
@@ -12,6 +13,7 @@ class ComfyState:
     job_seconds: float = 0.05
     freed: list = field(default_factory=list)
     prompts: list = field(default_factory=list)
+    prompt_times: list = field(default_factory=list)  # time.monotonic() when each /prompt arrived
 
 
 def make_app(state: ComfyState) -> web.Application:
@@ -24,6 +26,7 @@ def make_app(state: ComfyState) -> web.Application:
 
     async def prompt(request):
         state.prompts.append(await request.json())
+        state.prompt_times.append(time.monotonic())
         state.running += 1
 
         async def finish():
