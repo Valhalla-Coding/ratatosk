@@ -43,11 +43,12 @@ async def completions(request):
     log({"event": "request", "path": request.path, "body": body, "ctx": args.ctx_size, "pid": os.getpid()})
     if not body.get("stream"):
         return web.json_response({"choices": [{"text": "hello"}], "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+    delay = float(body["slow"]) if body.get("slow") else CHUNK_DELAY  # a request can ask for slow chunks
     resp = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
     await resp.prepare(request)
     for i in range(3):
         await resp.write(f'data: {json.dumps({"choices": [{"text": f"t{i}"}]})}\n\n'.encode())
-        await asyncio.sleep(CHUNK_DELAY)
+        await asyncio.sleep(delay)
     await resp.write(b"data: [DONE]\n\n")
     return resp
 
