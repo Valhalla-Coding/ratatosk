@@ -39,7 +39,10 @@ def load_settings(path: Path) -> Settings:
     path = Path(path)
     if not path.exists():
         return Settings()
-    data = json.loads(path.read_text(encoding="utf-8"))
+    return settings_from_dict(json.loads(path.read_text(encoding="utf-8")))
+
+
+def settings_from_dict(data: dict) -> Settings:
     known = {f.name for f in fields(Settings)}
     kwargs = {k: v for k, v in data.items() if k in known and k != "routes"}
     if "routes" in data:

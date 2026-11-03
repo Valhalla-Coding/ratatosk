@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ratatosk</title>
+<style>
+  :root { --bg:#14161b; --panel:#1d2027; --line:#2c313b; --text:#e6e8ec; --dim:#8d94a3; --accent:#e8a23c; --good:#5cc08a; --bad:#e0645c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:1rem; padding:.8rem 1rem; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:1.2rem; color:var(--accent); }
+  nav button { background:none; border:0; color:var(--dim); font:inherit; padding:.4rem .8rem; cursor:pointer; border-bottom:2px solid transparent; }
+  nav button.on { color:var(--text); border-color:var(--accent); }
+  main { max-width:900px; margin:0 auto; padding:1rem; }
+  section { display:none; } section.on { display:block; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.9rem 1rem; margin-bottom:1rem; }
+  .card h2 { margin:0 0 .5rem; font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
+  .bar { height:12px; background:var(--line); border-radius:6px; overflow:hidden; } .bar i { display:block; height:100%; background:var(--accent); }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:.3rem .4rem; border-bottom:1px solid var(--line); font-size:.9rem; } th { color:var(--dim); font-weight:500; }
+  label { display:block; margin:.5rem 0 .15rem; color:var(--dim); font-size:.85rem; }
+  input, select, textarea { background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:.35rem .5rem; font:inherit; width:100%; }
+  textarea { font-family:ui-monospace, monospace; min-height:4.5rem; }
+  .row { display:flex; gap:.5rem; margin-bottom:.4rem; } .row > * { flex:1; } .row button { flex:0 0 auto; }
+  button.act { background:var(--accent); color:#1b1306; border:0; border-radius:5px; padding:.45rem 1rem; font:inherit; cursor:pointer; }
+  button.small { background:var(--line); color:var(--text); border:0; border-radius:5px; padding:.3rem .6rem; cursor:pointer; }
+  #msg { margin-left:.8rem; } .ok { color:var(--good); } .err { color:var(--bad); } .dim { color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐿️ Ratatosk</h1>
+  <nav><button id="tab-now" class="on" onclick="show('now')">Now</button><button id="tab-settings" onclick="show('settings')">Settings</button></nav>
+</header>
+<main>
+  <section id="now" class="on">
+    <div class="card"><h2>GPU memory</h2><div class="bar"><i id="gpu-bar" style="width:0"></i></div><div id="gpu-text" class="dim"></div></div>
+    <div class="card"><h2>Engine</h2><div id="engine"></div></div>
+    <div class="card"><h2>Queue</h2><div id="queue"></div><div id="comfy" class="dim"></div></div>
+    <div class="card"><h2>Recent requests</h2>
+      <table><thead><tr><th>When</th><th>Route</th><th>Model</th><th>Context</th><th>Tokens in</th><th>Seconds</th><th>Status</th></tr></thead><tbody id="recent"></tbody></table></div>
+  </section>
+  <section id="settings">
+    <div class="card"><h2>Routes (listening port to backend)</h2><div id="routes"></div><button class="small" onclick="addRoute()">+ route</button>
+      <div class="dim">Port changes apply after the service restarts.</div></div>
+    <div class="card"><h2>General</h2><div id="fields"></div></div>
+    <div class="card"><h2>Models and aliases</h2><label>Model folders (JSON list of {"path", "label"})</label><textarea id="model_folders"></textarea>
+      <label>Aliases (JSON, name the client asks for → model id)</label><textarea id="aliases"></textarea></div>
+    <button class="act" onclick="save()">Save</button><span id="msg"></span>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const NUM = ["ui_port","engine_port","max_tokens_cap","idle_minutes","reserve_gb","image_wait_seconds","threads"];
+const TXT = ["comfy_url","engine_dir","default_model","data_dir"];
+let routes = [];
+
+function show(name) {
+  for (const s of ["now","settings"]) { $(s).classList.toggle("on", s === name); $("tab-" + s).classList.toggle("on", s === name); }
+  if (name === "settings") loadSettings();
+}
+function td(tr, text) { const c = document.createElement("td"); c.textContent = text; tr.appendChild(c); }
+
+async function refresh() {
+  try {
+    const d = await (await fetch("/api/status")).json();
+    if (d.gpu) { $("gpu-bar").style.width = (100 * d.gpu.used_mb / d.gpu.total_mb) + "%"; $("gpu-text").textContent = d.gpu.used_mb + " / " + d.gpu.total_mb + " MB"; }
+    else { $("gpu-bar").style.width = "0"; $("gpu-text").textContent = "no GPU reading"; }
+    $("engine").textContent = d.engine ? d.engine.model + " at " + d.engine.ctx + " tokens of context" : "No model loaded";
+    $("queue").textContent = (d.queue.running ? "Running: " + d.queue.running : "Idle") + (d.queue.pending.length ? "   Waiting: " + d.queue.pending.join(", ") : "");
+    $("comfy").textContent = d.comfy_pending === null ? "ComfyUI: not reachable" : "ComfyUI jobs: " + d.comfy_pending;
+    const body = $("recent"); body.replaceChildren();
+    for (const r of d.recent) { const tr = document.createElement("tr");
+      [r.ts, r.route + " " + r.profile, r.model, r.ctx, r.prompt_tokens, (r.seconds || 0).toFixed(1), r.status].forEach(v => td(tr, v)); body.appendChild(tr); }
+  } catch (e) { $("queue").textContent = "Cannot reach Ratatosk"; }
+}
+
+function drawRoutes() {
+  const box = $("routes"); box.replaceChildren();
+  routes.forEach((r, i) => {
+    const row = document.createElement("div"); row.className = "row";
+    const port = Object.assign(document.createElement("input"), { type: "number", value: r.port });
+    const kind = Object.assign(document.createElement("select"), {}); ["llm","comfy"].forEach(k => kind.add(new Option(k, k, false, k === r.kind)));
+    const prof = Object.assign(document.createElement("select"), {}); ["plain","rp"].forEach(k => prof.add(new Option(k, k, false, k === r.profile)));
+    port.oninput = () => r.port = +port.value; kind.onchange = () => r.kind = kind.value; prof.onchange = () => r.profile = prof.value;
+    const del = Object.assign(document.createElement("button"), { className: "small", textContent: "remove" }); del.onclick = () => { routes.splice(i, 1); drawRoutes(); };
+    row.append(port, kind, prof, del); box.appendChild(row);
+  });
+}
+function addRoute() { routes.push({ port: 11436, kind: "llm", profile: "plain" }); drawRoutes(); }
+
+async function loadSettings() {
+  const s = await (await fetch("/api/settings")).json();
+  routes = s.routes; drawRoutes();
+  const box = $("fields"); box.replaceChildren();
+  for (const k of [...NUM, ...TXT]) {
+    const label = Object.assign(document.createElement("label"), { textContent: k, htmlFor: "f-" + k });
+    const input = Object.assign(document.createElement("input"), { id: "f-" + k, type: NUM.includes(k) ? "number" : "text", value: s[k] });
+    box.append(label, input);
+  }
+  $("model_folders").value = JSON.stringify(s.model_folders, null, 2);
+  $("aliases").value = JSON.stringify(s.aliases, null, 2);
+}
+
+async function save() {
+  const msg = $("msg"); msg.className = ""; msg.textContent = "";
+  try {
+    const body = { routes, model_folders: JSON.parse($("model_folders").value), aliases: JSON.parse($("aliases").value) };
+    for (const k of NUM) body[k] = +$("f-" + k).value;
+    for (const k of TXT) body[k] = $("f-" + k).value;
+    const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (res.ok) { msg.className = "ok"; msg.textContent = "Saved"; } else { msg.className = "err"; msg.textContent = (await res.json()).error; }
+  } catch (e) { msg.className = "err"; msg.textContent = "The JSON boxes must contain valid JSON"; }
+}
+
+refresh(); setInterval(refresh, 2000);
+</script>
+</body>
+</html>
