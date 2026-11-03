@@ -65,6 +65,21 @@ async def test_settings_put_persists_and_rejects_bad_input(rig):
     assert rig.settings.max_tokens_cap == 512  # a rejected change leaves everything as it was
 
 
+@pytest.mark.parametrize("change", [
+    {"routes": [{"port": 11434, "kind": "llm"}, {"port": 11434, "kind": "comfy"}]},  # the same port twice
+    {"routes": [{"port": 5960, "kind": "llm"}]},  # a route on the UI's own port
+    {"routes": [{"port": 8081, "kind": "llm"}]},  # a route on the engine's port
+    {"routes": [{"port": 80, "kind": "llm"}]},  # a privileged port the service cannot bind
+    {"routes": []},  # nothing left to serve
+    {"ui_port": 11434},  # the UI moved onto a route's port
+])
+async def test_settings_put_rejects_port_clashes_that_would_crash_the_service(rig, change):
+    before = rig.settings.ui_port, [r.port for r in rig.settings.routes]
+    resp = await rig.client.put("/api/settings", json=change)
+    assert resp.status == 400 and "error" in await resp.json()
+    assert (rig.settings.ui_port, [r.port for r in rig.settings.routes]) == before  # nothing was applied
+
+
 async def test_index_has_both_tabs(rig):
     text = await (await rig.client.get("/")).text()
     assert "Now" in text and "Settings" in text

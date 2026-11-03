@@ -16,7 +16,7 @@ class FakeEngine:
     url = "http://engine"
 
     def __init__(self, calls):
-        self.calls, self.loaded, self.fail, self.running = calls, None, False, False
+        self.calls, self.loaded, self.fail, self.running, self.stop_delay = calls, None, False, False, 0
 
     @property
     def pid(self):
@@ -30,6 +30,9 @@ class FakeEngine:
 
     async def stop(self):
         self.calls.append(("stop",))
+        if self.stop_delay:  # a terminating llama-server takes a moment to release the GPU
+            await asyncio.sleep(self.stop_delay)
+            self.calls.append(("stopped",))
         self.loaded, self.running = None, False
 
 
@@ -124,6 +127,41 @@ async def test_idle_stops_engine(rig):
     clock.t += 2 * 60
     await s.idle_check()
     assert not engine.running
+
+
+async def test_a_chat_arriving_during_the_idle_stop_waits_for_it_and_the_idle_loop_survives(rig):
+    make, calls, engine, clock, _ = rig
+    s = make()
+    await s.run_llm(P_LLM, MODEL, 5000, ok)
+    clock.t += 31 * 60
+    engine.stop_delay = 0.2
+    idle = asyncio.create_task(s.idle_loop(check_seconds=0.01))
+    await asyncio.sleep(0.08)  # the idle stop is now in the middle of stopping the engine
+    calls.clear()
+    assert await s.run_llm(P_LLM, MODEL, 5000, ok) == "ok:http://engine"
+    assert calls.index(("stopped",)) < calls.index(("ensure", 8192))  # the stop finished before the engine restarted
+    assert calls.count(("stopped",)) == 1  # one stop, run to completion, not cut off and not repeated
+    assert not idle.done()  # one interrupted check must not end idle stopping for good
+    idle.cancel()
+
+
+async def test_idle_loop_survives_a_failing_check(rig):
+    make, calls, engine, clock, _ = rig
+    s = make()
+    boom = {"n": 0}
+    real = s.idle_check
+
+    async def flaky():
+        boom["n"] += 1
+        if boom["n"] == 1:
+            raise RuntimeError("first check fails")
+        await real()
+
+    s.idle_check = flaky
+    idle = asyncio.create_task(s.idle_loop(check_seconds=0.01))
+    await asyncio.sleep(0.1)
+    assert boom["n"] > 1 and not idle.done()
+    idle.cancel()
 
 
 async def test_engine_failure_fails_job_and_queue_continues(rig):

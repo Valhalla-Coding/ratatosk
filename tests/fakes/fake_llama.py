@@ -48,6 +48,9 @@ async def completions(request):
     await resp.prepare(request)
     for i in range(3):
         await resp.write(f'data: {json.dumps({"choices": [{"text": f"t{i}"}]})}\n\n'.encode())
+        if body.get("drop"):  # the engine dies mid-reply
+            request.transport.abort()
+            return resp
         await asyncio.sleep(delay)
     await resp.write(b"data: [DONE]\n\n")
     return resp

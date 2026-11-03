@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable
 from ratatosk.buckets import BUCKETS, pick_bucket
 from ratatosk.comfy import Comfy
 from ratatosk.engine import Engine
-from ratatosk.gpuqueue import P_IMAGE, P_TUNE, GpuQueue, Job
+from ratatosk.gpuqueue import P_IMAGE, P_LLM, GpuQueue, Job
 from ratatosk.models import Model
 from ratatosk.settings import Settings
 
@@ -90,14 +90,28 @@ class Scheduler:
             await asyncio.gather(task, return_exceptions=True)  # leave the queue clean before reporting
             raise
 
+    def _idle_long_enough(self) -> bool:
+        return self.clock() - self._last_activity >= self.settings.idle_minutes * 60
+
     async def idle_check(self) -> None:
-        """Stop the engine when nothing has used it for `idle_minutes`."""
+        """Stop the engine when nothing has used it for `idle_minutes`.
+
+        The stop runs as an ordinary P_LLM job, not a preemptible P_TUNE one: a chat that arrives while the
+        engine is shutting down must wait for the shutdown to finish, not cut it off half way."""
         quiet = self.queue.snapshot() == {"running": None, "pending": []}
-        if (self.engine.pid is not None and quiet
-                and self.clock() - self._last_activity >= self.settings.idle_minutes * 60):
-            await self.queue.submit(Job("idle-stop", P_TUNE, self.engine.stop))
+        if self.engine.pid is None or not quiet or not self._idle_long_enough():
+            return
+
+        async def stop_if_still_idle():
+            if self._idle_long_enough():  # a job may have run between the check and this job's turn
+                await self.engine.stop()
+
+        await self.queue.submit(Job("idle-stop", P_LLM, stop_if_still_idle))
 
     async def idle_loop(self, check_seconds: float = 30) -> None:
         while True:
             await asyncio.sleep(check_seconds)
-            await self.idle_check()
+            try:
+                await self.idle_check()
+            except Exception:  # ponytail: a failed check is retried at the next interval; add logging when the service logs
+                pass

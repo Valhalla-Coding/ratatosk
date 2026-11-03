@@ -64,6 +64,20 @@ def validate_settings(data) -> None:
             raise ValueError(f"route profile must be one of {PROFILES}")
 
 
+def validate_ports(effective: dict) -> None:
+    """The settings as they would be after the change: a service that cannot bind would crash-loop with no UI left."""
+    routes = effective.get("routes") or []
+    if not routes:
+        raise ValueError("at least one route is needed")
+    ports = [r["port"] for r in routes] + [effective["ui_port"], effective["engine_port"]]
+    duplicates = sorted({p for p in ports if ports.count(p) > 1})
+    if duplicates:
+        raise ValueError(f"each port can be used once (routes, the UI and the engine); repeated: {duplicates}")
+    low = sorted(p for p in ports if p < 1024)
+    if low:
+        raise ValueError(f"ports below 1024 need root and cannot be used: {low}")
+
+
 def make_ui_app(ctx: AppContext, comfy: Comfy, settings_path: Path,
                 gpu_reader: Callable[[], Awaitable[dict | None]] = read_gpu) -> web.Application:
     async def status(_):
@@ -87,6 +101,7 @@ def make_ui_app(ctx: AppContext, comfy: Comfy, settings_path: Path,
         try:
             data = await request.json()
             validate_settings(data)
+            validate_ports({**asdict(ctx.settings), **data})
         except ValueError as exc:
             return web.json_response({"error": str(exc)}, status=400)
         candidate = settings_from_dict({**asdict(ctx.settings), **data})

@@ -8,8 +8,10 @@ from ratatosk.scheduler import GpuBusy
 from ratatosk.settings import Route
 
 SESSION = web.AppKey("session", aiohttp.ClientSession)
+# Host is deliberately forwarded: ComfyUI refuses a request whose Host is loopback but whose Origin is a LAN address.
 HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers",
-              "transfer-encoding", "upgrade", "host", "content-length"}
+              "transfer-encoding", "upgrade", "content-length"}
+MAX_BODY = 256 * 2**20  # image uploads and large workflows go through this app
 
 
 def _clean(headers) -> dict:
@@ -74,7 +76,7 @@ def make_comfy_app(route: Route, ctx: AppContext) -> web.Application:
             await resp.write_eof()
             return resp
 
-    app = web.Application()
+    app = web.Application(client_max_size=MAX_BODY)
     app.on_startup.append(start_session)
     app.on_cleanup.append(close_session)
     app.router.add_post("/prompt", prompt)

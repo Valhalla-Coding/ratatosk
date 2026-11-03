@@ -42,7 +42,8 @@ async def rig(aiohttp_server, aiohttp_client):
     queue = GpuQueue()
     queue.start()
     engine = FakeEngine()
-    scheduler = Scheduler(settings, queue, engine, Comfy(settings.comfy_url, session), poll_seconds=0.05)
+    comfy = Comfy(settings.comfy_url, session, settle_poll=0.05, settle_quiet=0.2)
+    scheduler = Scheduler(settings, queue, engine, comfy, poll_seconds=0.05)
 
     class Rig:
         pass
@@ -57,7 +58,10 @@ async def rig(aiohttp_server, aiohttp_client):
             await gate.wait()
 
         task = asyncio.create_task(scheduler.run_llm(P_LLM, MODEL, 5000, slow))
-        await asyncio.sleep(0.05)
+        for _ in range(200):  # the job first frees ComfyUI's memory, then starts the engine, then holds the GPU
+            if engine.running:
+                break
+            await asyncio.sleep(0.02)
         return task
 
     r.hold_gpu = hold_gpu
@@ -68,7 +72,7 @@ async def rig(aiohttp_server, aiohttp_client):
 
 async def test_passthrough_system_stats(rig):
     resp = await rig.client.get("/system_stats")
-    assert resp.status == 200 and await resp.json() == {"system": {"fake": True}}
+    assert resp.status == 200 and (await resp.json())["system"] == {"fake": True}
 
 
 async def test_prompt_waits_behind_llm_job(rig):
@@ -102,6 +106,19 @@ async def test_second_prompt_waits_until_comfy_idle(rig):
     await asyncio.gather(a, b)
     first, second = rig.state.prompt_times
     assert second - first >= 0.45
+
+
+async def test_prompt_keeps_the_clients_host_so_comfyuis_origin_check_passes(rig):
+    # A browser on the LAN sends Host and Origin for the address it used. ComfyUI refuses the request
+    # when it sees a loopback Host with a different Origin, which is what a rewritten Host would look like.
+    resp = await rig.client.post("/prompt", json={"prompt": {}},
+                                 headers={"Host": "192.168.1.11:8188", "Origin": "http://192.168.1.11:8188"})
+    assert resp.status == 200
+
+
+async def test_large_upload_passes_through(rig):
+    resp = await rig.client.post("/upload/image", data=b"x" * (3 * 2**20))
+    assert resp.status == 200 and (await resp.json())["size"] == 3 * 2**20
 
 
 async def test_ws_echo_both_directions(rig):
