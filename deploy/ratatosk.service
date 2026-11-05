@@ -1,14 +1,14 @@
-# Install as a user service for the user that runs ComfyUI and LM Studio (master):
+# Install as a user service (systemd expands %h to your home folder; the app lives in ~/ratatosk):
 #   mkdir -p ~/.config/systemd/user && cp deploy/ratatosk.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload && systemctl --user enable --now ratatosk
-#   loginctl enable-linger master     # keeps it running without a desktop login
+#   loginctl enable-linger "$USER"     # keeps it running without a desktop login
 [Unit]
 Description=Ratatosk GPU traffic control
 After=network-online.target
 
 [Service]
-WorkingDirectory=/home/master/ratatosk
-ExecStart=/home/master/ratatosk/venv/bin/python -m ratatosk --config /home/master/ratatosk/data/settings.json
+WorkingDirectory=%h/ratatosk
+ExecStart=%h/ratatosk/venv/bin/python -m ratatosk --config %h/ratatosk/data/settings.json
 Restart=always
 RestartSec=3
 

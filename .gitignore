@@ -1,6 +1,28 @@
+# environments and caches
 .venv/
-data/
+venv/
 __pycache__/
 *.egg-info/
-.superpowers/
 .pytest_cache/
+dist/
+build/
+# runtime data: request history, settings copies, engine log, downloaded models and engine
+data/
+*.db
+*.log
+*.gguf
+engine/
+# secrets and local notes
+.env
+.env.*
+*.pem
+*.key
+docs/local/
+# editors, OS, tooling
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.claude/
+.superpowers/
+graphify-out/

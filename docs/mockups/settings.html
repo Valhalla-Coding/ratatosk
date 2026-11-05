@@ -204,7 +204,7 @@ document.getElementById("delok").onclick=()=>gone&&gone.remove();})();
 </script>
 <script>
 (()=>{const list=document.getElementById("plist"),inp=document.getElementById("padd"),sug=document.getElementById("psug");
-const recent=[["SillyTavern","192.168.1.12 \u00b7 node-fetch","2 min ago"],["Camera system","192.168.1.12 \u00b7 OpenAI/Python","5 min ago"],["Josef's PC","192.168.1.20 \u00b7 Mozilla/5.0","3 h ago"],["ComfyUI web page","192.168.1.20 \u00b7 Mozilla/5.0 (port 8188)","yesterday"],["Roleplay door","port 11435","a door"],["General text door","port 11434","a door"],["ComfyUI door","port 8188","a door"]];
+const recent=[["SillyTavern","192.168.1.12 \u00b7 node-fetch","2 min ago"],["Camera system","192.168.1.12 \u00b7 OpenAI/Python","5 min ago"],["Desktop PC","192.168.1.20 \u00b7 Mozilla/5.0","3 h ago"],["ComfyUI web page","192.168.1.20 \u00b7 Mozilla/5.0 (port 8188)","yesterday"],["Roleplay door","port 11435","a door"],["General text door","port 11434","a door"],["ComfyUI door","port 8188","a door"]];
 const grip='<button class="grip" type="button" aria-label="Move line (Alt+Up or Alt+Down)">\u283f</button>';
 const used=()=>[...list.querySelectorAll(".pr .what")].map(w=>w.textContent);
 const settle=()=>{const rows=[...list.querySelectorAll(".pr")];[...rows.filter(r=>r.classList.contains("danger")),...rows.filter(r=>!r.classList.contains("danger"))].forEach(r=>list.insertBefore(r,list.querySelector(".else")));};

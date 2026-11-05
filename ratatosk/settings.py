@@ -21,10 +21,10 @@ class Settings:
     ui_port: int = 5960
     engine_port: int = 8081
     comfy_url: str = "http://127.0.0.1:8189"
-    engine_dir: str = "/home/master/ratatosk/engine"
+    engine_dir: str = field(default_factory=lambda: str(Path.home() / "ratatosk" / "engine"))
     threads: int = field(default_factory=lambda: max(1, (os.cpu_count() or 2) // 2))
     model_folders: list[dict] = field(
-        default_factory=lambda: [{"path": "/home/master/.lmstudio/models", "label": "SSD models"}]
+        default_factory=lambda: [{"path": str(Path.home() / "models"), "label": "Models"}]
     )
     default_model: str = ""
     aliases: dict = field(default_factory=dict)
