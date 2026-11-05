@@ -34,6 +34,15 @@
   .addr { display:inline-flex; white-space:nowrap; } .addr code { border-radius:4px 0 0 4px; padding:.2rem .5rem; display:inline-flex; align-items:center; }
   .copy { display:inline-flex; align-items:center; padding:0 .5rem; border-radius:0 4px 4px 0; background:var(--line); color:var(--dim); border-left:1px solid var(--panel); } .copy:hover { color:var(--text); } .copy.done { background:var(--good); color:#08170f; }
   tr.door.has-hint td { border-bottom:0; } tr.hint td { padding:0 .4rem .5rem; } .hint .note { font-size:.72rem; color:var(--bad); line-height:1.3; }
+  table.models td:nth-child(3) { white-space:nowrap; } .caps { display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.25rem; }
+  .cap { display:inline-flex; align-items:center; gap:.25rem; font-size:.72rem; padding:.05rem .5rem; border-radius:99px; border:1px solid; } .cap svg { width:12px; height:12px; }
+  .cap.v { color:var(--accent); border-color:rgba(232,162,60,.4); } .cap.t { color:var(--blue); border-color:rgba(106,167,255,.4); } .cap.r { color:var(--good); border-color:rgba(92,192,138,.4); }
+  .chip .x { all:unset; cursor:pointer; color:var(--bad); margin-left:.35rem; font-weight:700; } .chip .x:focus-visible { outline:2px solid var(--accent); border-radius:3px; }
+  button.chip { font:inherit; font-size:.8rem; cursor:pointer; color:var(--text); } button.chip.add { color:var(--accent); }
+  .trash { background:none; color:var(--bad); padding:.3rem; border-radius:5px; } .trash:hover { background:rgba(224,100,92,.12); }
+  .danger { background:var(--bad); color:#1d0907; } .addm { display:flex; gap:.5rem; } .addm input { width:20rem; max-width:50vw; }
+  dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:1rem 1.2rem; max-width:26rem; } dialog::backdrop { background:rgba(0,0,0,.6); } dialog h3 { margin:0 0 .3rem; font-size:1rem; }
+  #presets { margin:.5rem 0; } .dlgbtn { display:flex; gap:.5rem; justify-content:flex-end; margin-top:.8rem; } .err { color:var(--bad); font-size:.8rem; min-height:1.1rem; }
   :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 </style>
 </head>
@@ -56,16 +65,19 @@
     </section>
 
     <section id="models">
-      <h2>Models</h2><p class="lead">Found in your model folders. The default answers when a client names a model that does not exist.</p>
-      <table><thead><tr><th>Default</th><th>Model</th><th>Size</th><th>Also answers to</th></tr></thead><tbody>
-        <tr><td><input type="radio" name="d" checked aria-label="Default"></td><td>Qwen3.5-9B obliterated Q5_K_M <span class="vision"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>can read pictures</span></td><td>6.5 GB</td>
-          <td><span class="chip">qwen3.5-9b-obliterated</span><span class="chip">qwen/qwen3.5-9b</span><span class="chip add">+ name</span></td></tr>
-        <tr><td><input type="radio" name="d" aria-label="Default"></td><td>Qwen3.5-9B Q4_K_M</td><td>5.6 GB</td><td><span class="chip add">+ name</span></td></tr>
-        <tr><td><input type="radio" name="d" aria-label="Default"></td><td>MythoMax L2 13B Q3_K_S</td><td>5.7 GB</td><td><span class="chip add">+ name</span></td></tr>
+      <h2>Models</h2><p class="lead">Everything Ratatosk finds in your model folders. What a model can do is read from the model itself. The default answers when a client names a model that does not exist.</p>
+      <table class="models"><thead><tr><th>Default</th><th>Model</th><th>Size</th><th>Also answers to</th><th></th></tr></thead><tbody>
+        <tr class="model" data-file="Qwen3.5-9B obliterated Q5_K_M"><td><input type="radio" name="d" checked aria-label="Default"></td><td><b>Qwen3.5-9B obliterated Q5_K_M</b><div class="caps"><span class="cap v"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>Vision</span><span class="cap t"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10.5 2.5a3 3 0 0 0-2.7 4L2.5 11.8a1.4 1.4 0 0 0 2 2L9.8 8.5a3 3 0 0 0 4-2.7L12 7.5 9.5 5z"/></svg>Tool use</span><span class="cap r"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2v12"/></svg>Reasoning</span></div></td><td>6.5 GB</td><td class="names"><span class="chip">qwen3.5-9b-obliterated<button class="x" type="button" aria-label="Remove name qwen3.5-9b-obliterated">&times;</button></span><span class="chip">qwen/qwen3.5-9b<button class="x" type="button" aria-label="Remove name qwen/qwen3.5-9b">&times;</button></span><button class="chip add" type="button">+ name</button></td><td><button class="trash" type="button" aria-label="Delete Qwen3.5-9B obliterated Q5_K_M" title="Delete from disk"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg></button></td></tr>
+        <tr class="model" data-file="Qwen3.5-9B Q4_K_M"><td><input type="radio" name="d" aria-label="Default"></td><td><b>Qwen3.5-9B Q4_K_M</b><div class="caps"><span class="cap v"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>Vision</span><span class="cap t"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10.5 2.5a3 3 0 0 0-2.7 4L2.5 11.8a1.4 1.4 0 0 0 2 2L9.8 8.5a3 3 0 0 0 4-2.7L12 7.5 9.5 5z"/></svg>Tool use</span><span class="cap r"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2v12"/></svg>Reasoning</span></div></td><td>5.6 GB</td><td class="names"><button class="chip add" type="button">+ name</button></td><td><button class="trash" type="button" aria-label="Delete Qwen3.5-9B Q4_K_M" title="Delete from disk"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg></button></td></tr>
+        <tr class="model" data-file="MythoMax L2 13B Q3_K_S"><td><input type="radio" name="d" aria-label="Default"></td><td><b>MythoMax L2 13B Q3_K_S</b><div class="caps"><span class="dim">text only</span></div></td><td>5.7 GB</td><td class="names"><button class="chip add" type="button">+ name</button></td><td><button class="trash" type="button" aria-label="Delete MythoMax L2 13B Q3_K_S" title="Delete from disk"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg></button></td></tr>
       </tbody></table>
-      <div class="row"><div class="what"><b>Camera name <code>qwen/qwen3.5-9b</code>: answer straight away</b><span>Turns thinking off for requests that use this name. Anything the client sets itself still wins.</span></div><label><input type="checkbox" checked> on</label></div>
-      <div class="row"><div class="what"><b>Vision file for the roleplay model</b><span>Found automatically next to Qwen3.5-9B Q4_K_M; shared with the roleplay model.</span></div><select aria-label="Vision file"><option>mmproj-Qwen3.5-9B-BF16.gguf</option><option>none</option></select></div>
+      <div class="row"><div class="what"><b>Add a model</b><span>Paste a Hugging Face link. Ratatosk lists the GGUF files and you pick one.</span></div><span class="addm"><input type="text" placeholder="https://huggingface.co/owner/model" aria-label="Hugging Face link"><button class="primary" type="button">Find files</button></span></div>
       <details><summary>Model folders (1)</summary><table><tbody><tr><td><code>/home/master/models</code></td><td>SSD, 14 GB free</td><td><span class="chip add">+ folder</span></td></tr></tbody></table></details>
+      <dialog id="namedlg"><form method="dialog"><h3>Add a name for <span id="dlgmodel"></span></h3><p class="dim">Clients can ask for this model by any name you give it.</p>
+        <div id="presets"><button type="button" class="chip pre">gpt-4o</button><button type="button" class="chip pre">gpt-4</button><button type="button" class="chip pre">gpt-3.5-turbo</button><button type="button" class="chip pre">local-model</button><button type="button" class="chip pre">default</button></div>
+        <label>Or your own: <input type="text" id="custom" placeholder="Cindy"></label> <div id="dlgerr" class="err" role="alert"></div>
+        <div class="dlgbtn"><button class="quiet" value="cancel">Cancel</button><button class="primary" id="addname" value="ok">Add name</button></div></form></dialog>
+      <dialog id="deldlg"><form method="dialog"><h3>Delete <span id="delmodel"></span>?</h3><p>The file is removed from disk and cannot be brought back. Its names go with it.</p><div class="dlgbtn"><button class="quiet" value="cancel">Cancel</button><button class="danger" id="delok" value="ok">Delete file</button></div></form></dialog>
     </section>
 
     <section id="replies">
@@ -76,7 +88,7 @@
 
     <section id="gpu">
       <h2>GPU and memory</h2><p class="lead">The GPU has 8 GB. These trade speed for room.</p>
-      <div class="row"><div class="what"><b>Picture reader runs on</b><span>Measured here with 12 camera frames.</span></div></div>
+      <div class="row"><div class="what"><b>Vision (reading pictures) runs on</b><span>Only matters for models that can see. Measured here with 12 pictures in one request.</span></div></div>
       <div class="choice">
         <label class="on"><input type="radio" name="p" checked> The GPU <small>Camera request about 49 s. Text about 12 tokens/s.</small></label>
         <label><input type="radio" name="p"> The CPU <small>Camera request about 183 s. Text about 25 tokens/s.</small></label>
@@ -117,6 +129,19 @@ document.querySelectorAll("tr.door").forEach(tr=>{
   sel.onchange=sync; port.oninput=sync; sync();
   tr.querySelector(".copy").onclick=async e=>{const b=e.currentTarget,old=b.innerHTML;try{await navigator.clipboard.writeText(tr.querySelector("code").textContent);b.textContent="Copied";b.classList.add("done");setTimeout(()=>{b.innerHTML=old;b.classList.remove("done")},1500);}catch{b.textContent="Select it";}};
 });
+</script>
+<script>
+(()=>{const dlg=document.getElementById("namedlg"),del=document.getElementById("deldlg"),custom=document.getElementById("custom"),err=document.getElementById("dlgerr");let cur=null,gone=null;
+const taken=n=>[...document.querySelectorAll("tr.model .chip:not(.add)")].some(c=>c.firstChild.textContent===n);
+const mk=n=>{const c=document.createElement("span");c.className="chip";c.append(n);const x=document.createElement("button");x.className="x";x.type="button";x.setAttribute("aria-label","Remove name "+n);x.textContent="\u00d7";c.append(x);return c;};
+const add=n=>{n=n.trim();if(!n)return"Type a name first.";if(taken(n))return"That name is already in use.";cur.querySelector(".names").insertBefore(mk(n),cur.querySelector(".add"));return"";};
+document.querySelector("table.models").addEventListener("click",e=>{const t=e.target,tr=t.closest("tr.model");if(!tr)return;
+  if(t.classList.contains("x"))t.parentNode.remove();
+  else if(t.classList.contains("add")){cur=tr;document.getElementById("dlgmodel").textContent=tr.dataset.file;custom.value="";err.textContent="";dlg.showModal();}
+  else if(t.closest(".trash")){gone=tr;document.getElementById("delmodel").textContent=tr.dataset.file;del.showModal();}});
+document.querySelectorAll(".pre").forEach(b=>b.onclick=()=>{err.textContent=add(b.textContent);if(!err.textContent)dlg.close();});
+document.getElementById("addname").onclick=e=>{e.preventDefault();err.textContent=add(custom.value);if(!err.textContent)dlg.close();};
+document.getElementById("delok").onclick=()=>gone&&gone.remove();})();
 </script>
 </body>
 </html>
