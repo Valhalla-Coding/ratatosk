@@ -25,3 +25,15 @@ Ratatosk now owns the public ports on Idun. Done with the user present.
 - An image generated through the ComfyUI API on 8188 (Realistic Vision SD 1.5, 512x512, 6 steps; 113 s the first time because the checkpoint loads from the spinning disk, 89 s the second). The text engine stepped aside for it, and after the next text request ComfyUI held 160 MB and the engine 6.2 GB.
 - `threads` must be 2: with the vision projector on the GPU, 4 threads made text slower (8.0 to 8.9 tok/s against 12.0 to 12.1 at 2). Raise it only if the projector goes back to the CPU.
 - First checkpoint load after a restart is slow because the checkpoints are on the HDD; models for ComfyUI that are used often belong on the SSD or the planned M.2.
+
+## LM Studio removed (2026-11-05)
+
+- Deleted: the app, `~/.lmstudio` (old engine copies, logs, settings, `llmster`), its launcher and `~/.config/LM-Studio`. Freed about 6.5 GB (7.2 GB free became 14 GB).
+- Models moved, not copied, to `/home/master/models` (same disk). Ratatosk's `model_folders` and `mmproj_files` point there. LM Studio's bundled embedding model (nomic-embed-text-v1.5, 84 MB) was kept in `/home/master/models/nomic-ai/` for a later embeddings endpoint.
+- Archive of the LM Studio chats, saved presets and benchmark results: `/home/master/lmstudio-archive-2026-11-05.tgz` (215 KB). Credentials were not archived.
+- `lm-studio-tuner` (in `~/Desktop`) points at the deleted folder and is replaced by Ratatosk's own tuning plan.
+- Settings before the move: `data/settings.before-lmstudio-removal.json`.
+
+## What the engine speaks (probed 2026-11-05) versus what Ratatosk passes on
+
+The engine (llama-server) answers: OpenAI chat and completions, OpenAI Responses (`/v1/responses`), Anthropic Messages (`/v1/messages`), and its own `/completion`, `/infill`, `/tokenize`, `/detokenize`, `/apply-template`, `/props`, `/slots`, `/health`, `/lora-adapters`. `/metrics`, embeddings and reranking need flags (501 without them). Ratatosk passes only `/v1/models`, `/v1/chat/completions` and `/v1/completions`; everything else is a 404.
