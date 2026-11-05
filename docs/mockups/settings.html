@@ -30,6 +30,12 @@
   .savebar { position:fixed; left:0; right:0; bottom:0; background:#101216; border-top:1px solid var(--line); padding:.7rem 1rem; display:flex; gap:.8rem; align-items:center; justify-content:center; flex-wrap:wrap; }
   .savebar .n { background:var(--accent); color:#1b1306; border-radius:99px; padding:.05rem .55rem; font-weight:600; font-size:.85rem; }
   button { font:inherit; border:0; border-radius:5px; padding:.45rem 1rem; cursor:pointer; } .primary { background:var(--accent); color:#1b1306; } .quiet { background:var(--line); color:var(--text); }
+  td:first-child { width:8rem; } .purpose { display:inline-flex; align-items:center; gap:.4rem; } .purpose select { width:100%; }
+  .copy { padding:.15rem .6rem; font-size:.8rem; background:var(--line); color:var(--text); margin-left:.3rem; } .copy.done { background:var(--good); color:#08170f; }
+  .info { width:1.4rem; height:1.4rem; padding:0; border-radius:50%; background:none; border:1px solid var(--blue); color:var(--blue); font:italic 600 .8rem/1 serif; flex:none; }
+  .hint .note { border-left:3px solid var(--blue); background:rgba(106,167,255,.08); padding:.5rem .7rem; font-size:.85rem; border-radius:0 5px 5px 0; }
+  .hint.warn .note { border-color:var(--accent); background:rgba(232,162,60,.1); } .hint.flash .note { animation:fl 1.2s ease-out; } @keyframes fl { from { outline:2px solid var(--accent); } to { outline:2px solid transparent; } }
+  @media (prefers-reduced-motion:reduce) { .hint.flash .note { animation:none; } }
   :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 </style>
 </head>
@@ -41,9 +47,12 @@
     <section id="doors">
       <h2>Doors</h2><p class="lead">Each door is a port other programs connect to. Give clients the address in the last column.</p>
       <table><thead><tr><th>Port</th><th>What it is for</th><th>Status</th><th>Address for clients</th></tr></thead><tbody>
-        <tr><td><input type="number" value="11434" aria-label="Port"></td><td><select aria-label="Purpose"><option>General text (cameras, tools)</option><option>Roleplay: goes first, short replies</option><option>ComfyUI images</option></select></td><td class="ok">listening</td><td><code>http://192.168.1.11:11434</code></td></tr>
-        <tr><td><input type="number" value="11435" aria-label="Port"></td><td><select aria-label="Purpose"><option>Roleplay: goes first, short replies</option></select></td><td class="ok">listening</td><td><code>http://192.168.1.11:11435</code></td></tr>
-        <tr><td><input type="number" value="8188" aria-label="Port"></td><td><select aria-label="Purpose"><option>ComfyUI images</option></select></td><td class="ok">listening</td><td><code>http://192.168.1.11:8188</code></td></tr>
+        <tr class="door"><td><input type="number" value="11434" aria-label="Port"></td><td><span class="purpose"><select aria-label="Purpose"><option selected>General text (cameras, tools)</option><option>Roleplay: goes first, short replies</option><option>ComfyUI images</option></select><button class="info" type="button" aria-label="About this door" aria-expanded="false" hidden>i</button></span></td><td class="ok">listening</td><td><code>http://192.168.1.11:<b class="p">11434</b></code> <button class="copy" type="button" aria-label="Copy address">Copy</button></td></tr>
+        <tr class="hint" hidden><td colspan="4"><div class="note"></div></td></tr>
+        <tr class="door"><td><input type="number" value="11435" aria-label="Port"></td><td><span class="purpose"><select aria-label="Purpose"><option>General text (cameras, tools)</option><option selected>Roleplay: goes first, short replies</option><option>ComfyUI images</option></select><button class="info" type="button" aria-label="About this door" aria-expanded="false" hidden>i</button></span></td><td class="ok">listening</td><td><code>http://192.168.1.11:<b class="p">11435</b></code> <button class="copy" type="button" aria-label="Copy address">Copy</button></td></tr>
+        <tr class="hint" hidden><td colspan="4"><div class="note"></div></td></tr>
+        <tr class="door"><td><input type="number" value="8188" aria-label="Port"></td><td><span class="purpose"><select aria-label="Purpose"><option>General text (cameras, tools)</option><option>Roleplay: goes first, short replies</option><option selected>ComfyUI images</option></select><button class="info" type="button" aria-label="About this door" aria-expanded="false" hidden>i</button></span></td><td class="ok">listening</td><td><code>http://192.168.1.11:<b class="p">8188</b></code> <button class="copy" type="button" aria-label="Copy address">Copy</button></td></tr>
+        <tr class="hint" hidden><td colspan="4"><div class="note"></div></td></tr>
       </tbody></table>
       <p><span class="chip add">+ Add a door</span> <span class="badge service">changing a port restarts the service</span></p>
     </section>
@@ -101,5 +110,20 @@
   </div>
 </main>
 <div class="savebar"><span class="n">3</span> unsaved changes <span class="dim">(1 restarts the engine)</span><button class="quiet">Discard</button><button class="primary">Save</button></div>
+<script>
+const msg={comfy:(p)=>p==="8188"?"Apps that talk to ComfyUI (SillyTavern, ComfyUI's own web page) assume 8188. Keep it unless you point them at a new port.":`Clients that assume 8188 will no longer find ComfyUI. Give them http://192.168.1.11:${p} instead.`};
+document.querySelectorAll("tr.door").forEach(tr=>{
+  const hint=tr.nextElementSibling, note=hint.querySelector(".note"), btn=tr.querySelector(".info"), sel=tr.querySelector("select"), port=tr.querySelector("input");
+  const sync=(attention)=>{const comfy=sel.value.startsWith("ComfyUI"); btn.hidden=!comfy; tr.querySelector(".p").textContent=port.value;
+    if(!comfy){hint.hidden=true;return;}
+    const odd=port.value!=="8188"; note.textContent=msg.comfy(port.value); hint.classList.toggle("warn",odd);
+    if(odd||attention){hint.hidden=false;btn.setAttribute("aria-expanded","true");}
+    if(attention){hint.classList.remove("flash");void hint.offsetWidth;hint.classList.add("flash");}};
+  btn.onclick=()=>{hint.hidden=!hint.hidden;btn.setAttribute("aria-expanded",String(!hint.hidden));};
+  btn.onkeydown=e=>{if(e.key==="Escape"){hint.hidden=true;btn.setAttribute("aria-expanded","false");}};
+  sel.onchange=()=>sync(true); port.oninput=()=>sync(true); sync(false);
+  tr.querySelector(".copy").onclick=async e=>{const b=e.target;try{await navigator.clipboard.writeText(tr.querySelector("code").textContent);b.textContent="Copied";b.classList.add("done");setTimeout(()=>{b.textContent="Copy";b.classList.remove("done")},1500);}catch{b.textContent="Select it";}};
+});
+</script>
 </body>
 </html>
