@@ -28,7 +28,8 @@ class Settings:
     )
     default_model: str = ""
     aliases: dict = field(default_factory=dict)
-    max_tokens_cap: int = 1024
+    max_tokens_cap: int = 1024  # longest reply on a roleplay route
+    max_tokens_cap_plain: int = 8192  # on other routes; a thinking model spends a thousand tokens or more before it answers
     idle_minutes: int = 30
     reserve_gb: int = 5
     image_wait_seconds: int = 600

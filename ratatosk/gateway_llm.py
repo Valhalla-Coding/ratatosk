@@ -133,7 +133,7 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
             return _error(400, f"model {model.id!r} cannot read pictures: it has no vision file "
                                "(put one beside it, or set it under mmproj_files in Settings)")
         asked = _asked_tokens(body)
-        capped = _capped_tokens(body, ctx.settings.max_tokens_cap)
+        capped = _capped_tokens(body, ctx.settings.max_tokens_cap if route.profile == "rp" else ctx.settings.max_tokens_cap_plain)
         body["max_tokens"] = capped
         body.pop("n_predict", None)
         if "max_completion_tokens" in body:

@@ -28,8 +28,8 @@ def free_port():
 async def rig(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_LOG", str(tmp_path / "fake.log"))
     port = free_port()
-    settings = Settings(engine_port=port, data_dir=str(tmp_path), default_model="alpha",
-                        aliases={"qwen3.5-9b-obliterated": "alpha"})
+    settings = Settings(engine_port=port, data_dir=str(tmp_path), default_model="alpha", max_tokens_cap=1024,
+                        max_tokens_cap_plain=1024, aliases={"qwen3.5-9b-obliterated": "alpha"})
     alpha = tmp_path / "alpha.gguf"
     alpha.write_bytes(b"x")
     models = [Model("alpha", alpha, 1, tmp_path)]
@@ -137,6 +137,20 @@ async def test_bad_or_huge_max_tokens_fall_back_to_the_cap(rig, aiohttp_client, 
     await resp.read()
     assert resp.status == 200
     assert [e for e in rig.log() if e["event"] == "request"][0]["body"]["max_tokens"] == 1024
+
+
+def test_the_plain_route_allows_longer_replies_than_the_roleplay_route_by_default():
+    # a thinking model spends over a thousand tokens before it answers, so the plain cap must leave room for that
+    assert Settings().max_tokens_cap_plain >= 4 * Settings().max_tokens_cap
+
+
+@pytest.mark.parametrize("profile, asked, allowed", [("plain", 65536, 4000), ("plain", None, 4000), ("rp", 65536, 1000), ("rp", None, 1000)])
+async def test_each_route_has_its_own_reply_cap(rig, aiohttp_client, profile, asked, allowed):
+    rig.settings.max_tokens_cap, rig.settings.max_tokens_cap_plain = 1000, 4000
+    client = await client_for(aiohttp_client, rig, profile)
+    body = {"model": "alpha", "prompt": "hi", **({"max_tokens": asked} if asked else {})}
+    await (await client.post("/v1/completions", json=body)).read()
+    assert [e for e in rig.log() if e["event"] == "request"][0]["body"]["max_tokens"] == allowed
 
 
 async def test_max_completion_tokens_is_capped_too(rig, aiohttp_client):
