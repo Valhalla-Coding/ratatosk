@@ -169,6 +169,27 @@ SQLite file `data/ratatosk.db`: `requests` (time, route, profile, model, context
 - Skills written for coding agents are long and assume tools, so most will not suit a 9B roleplay model; the size warning and the disabled-on-import default exist for that reason. Skills from GitHub are third-party text in the prompt: the model has no tools, so the risk is output quality, but they are previewed before use.
 - Open: a separate Images tab (not now, easy to add); an API key on the routes (off by default, LAN only).
 
+## 15. Changes made while building (2026-11-05)
+
+Real use on Idun showed things the design did not cover. Each change below was measured, not guessed.
+
+- **Vision.** A model has an optional vision file (`mmproj`), found beside it or set under `mmproj_files`; the engine gets `--mmproj` and `--image-max-tokens`. A picture sent to a model without one gets a clear 400. The roleplay model reads pictures with the camera model's vision file, so one loaded model serves both (an alias maps the camera's model name to it), with no swapping.
+- **Where the vision projector runs.** On the 8 GB GPU the projector halves text speed (25.1 to 11.8 tok/s) but reads pictures about 4 times faster than on the CPU (49 s against 183 s for 12 real-sized frames). `mmproj_on_gpu` chooses; Idun uses the GPU because its camera system sends a request every few minutes.
+- **Context sizing.** The rule in section 6 is now `1.25 * (prompt + pictures * image_max_tokens + min(capped reply, reply_reserve))`, with `image_max_tokens` 512 (a real camera frame measured about 430 to 500) and `reply_reserve` 2048. Reserving the whole cap and 1024 per picture had forced a 32k context, which cut text speed from 25 to about 14 tok/s; 16k is enough for a 12-frame camera request (about 6 to 7k tokens).
+- **Reply caps per route.** `max_tokens_cap` (roleplay route, 1024) and `max_tokens_cap_plain` (other routes, 8192): a thinking model spends over a thousand tokens before it answers, and the first replay of the camera request used all 1024 thinking.
+- **Request defaults.** `request_defaults` maps a model name to request fields added when the client left them out (client values win, nested objects merge). It plays the role of LM Studio's per-model presets, for example turning thinking off for one client name.
+- **ComfyUI memory.** `free()` waits for ComfyUI's own held memory (`torch_vram_total`) to drop, not for a quiet reading; the first live test had started the engine before ComfyUI let go (3.7 against 25 tok/s).
+- **Request log.** Requests keep client, program, endpoint, token cap asked and allowed, waiting time, speed, errors, and for the newest 50 the prompt and reply text. Pictures are stored as `[image]`. The GPU card names the programs using GPU memory.
+- **Capability check.** `scripts/capability_check.py` tests text, chat, streaming, thinking, pictures, structured JSON output and tool calls against any model name; it passes for both names on Idun.
+
+| Measured on Idun | Result |
+|---|---|
+| Old LM Studio setup (262k context, tuned by lm-studio-tuner) | 5.7 tok/s |
+| Ratatosk, model fully on the GPU, 8k or 16k context | 25.1 tok/s |
+| Same with the vision projector on the GPU | 11.8 to 12.9 tok/s |
+| Same at 32k context | about 14 tok/s (projector on CPU) |
+| 12 real-sized frames, projector on the GPU / on the CPU | 49 s / 183 s |
+
 ## Appendix: evidence for shaving
 
 A real reply from the game was 374 tokens (1,707 characters). Almost all of it was restated feelings, run-on atmosphere and filler; the actual events (Sera covers herself, answers hesitantly, is embarrassed) fit in two or three sentences. The same reply also exposed an engine log line, `mood ignored (unknown cast id): nervous`, where the model wrote a mood word without a character id and an unknown mood. Check 1 and the repair step exist to catch exactly this.
