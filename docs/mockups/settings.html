@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ratatosk Settings (mockup)</title>
+<style>
+  :root { --bg:#14161b; --panel:#1d2027; --line:#2c313b; --text:#e6e8ec; --dim:#8d94a3; --accent:#e8a23c; --good:#5cc08a; --bad:#e0645c; --blue:#6aa7ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; padding-bottom:5.5rem; }
+  header { display:flex; align-items:center; gap:1rem; padding:.8rem 1rem; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:1.2rem; color:var(--accent); } nav span { color:var(--dim); padding:.4rem .8rem; } nav span.on { color:var(--text); border-bottom:2px solid var(--accent); }
+  .tag { margin-left:auto; font-size:.75rem; color:var(--dim); border:1px solid var(--line); border-radius:99px; padding:.15rem .6rem; }
+  main { max-width:960px; margin:0 auto; padding:1rem; display:grid; grid-template-columns:11rem 1fr; gap:1.2rem; }
+  @media (max-width:760px) { main { grid-template-columns:1fr; } .toc { display:none; } }
+  .toc { position:sticky; top:1rem; align-self:start; display:grid; gap:.2rem; } .toc a { color:var(--dim); text-decoration:none; padding:.3rem .6rem; border-radius:5px; } .toc a:hover, .toc a.on { color:var(--text); background:var(--panel); }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:1rem 1.1rem; margin-bottom:1rem; }
+  h2 { margin:0 0 .15rem; font-size:1.05rem; } .lead { color:var(--dim); margin:0 0 .9rem; font-size:.9rem; }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:.45rem .4rem; border-bottom:1px solid var(--line); vertical-align:middle; font-size:.9rem; } th { color:var(--dim); font-weight:500; font-size:.8rem; }
+  .row { display:flex; justify-content:space-between; gap:1rem; align-items:center; padding:.6rem 0; border-bottom:1px solid var(--line); } .row:last-child { border:0; }
+  .row .what b { display:block; font-weight:500; } .row .what span { color:var(--dim); font-size:.85rem; }
+  input[type=number], input[type=text], select { background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:.35rem .5rem; font:inherit; } input[type=number] { width:6.5rem; text-align:right; }
+  .chip { display:inline-block; background:var(--bg); border:1px solid var(--line); border-radius:99px; padding:.05rem .6rem; font-size:.8rem; margin:.1rem .2rem .1rem 0; } .chip.add { color:var(--accent); border-style:dashed; }
+  .badge { font-size:.72rem; padding:.1rem .5rem; border-radius:99px; border:1px solid var(--line); color:var(--dim); white-space:nowrap; }
+  .badge.live { color:var(--good); border-color:rgba(92,192,138,.4); } .badge.engine { color:var(--accent); border-color:rgba(232,162,60,.4); } .badge.service { color:var(--bad); border-color:rgba(224,100,92,.4); }
+  .ok { color:var(--good); } .dim { color:var(--dim); } code { background:var(--bg); padding:.05rem .35rem; border-radius:4px; font-size:.85rem; }
+  .vision { display:inline-flex; align-items:center; gap:.25rem; color:var(--blue); font-size:.8rem; } .vision svg { width:14px; height:14px; }
+  .choice { display:grid; gap:.5rem; } .choice label { display:block; border:1px solid var(--line); border-radius:6px; padding:.55rem .7rem; } .choice label.on { border-color:var(--accent); background:rgba(232,162,60,.06); } .choice small { display:block; color:var(--dim); }
+  details { margin-top:.4rem; } summary { cursor:pointer; color:var(--dim); padding:.3rem 0; }
+  .savebar { position:fixed; left:0; right:0; bottom:0; background:#101216; border-top:1px solid var(--line); padding:.7rem 1rem; display:flex; gap:.8rem; align-items:center; justify-content:center; flex-wrap:wrap; }
+  .savebar .n { background:var(--accent); color:#1b1306; border-radius:99px; padding:.05rem .55rem; font-weight:600; font-size:.85rem; }
+  button { font:inherit; border:0; border-radius:5px; padding:.45rem 1rem; cursor:pointer; } .primary { background:var(--accent); color:#1b1306; } .quiet { background:var(--line); color:var(--text); }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+</style>
+</head>
+<body>
+<header><h1>Ratatosk</h1><nav><span>Now</span><span class="on">Settings</span></nav><span class="tag">MOCKUP: sample data, nothing here is saved</span></header>
+<main>
+  <nav class="toc" aria-label="Sections"><a class="on" href="#doors">Doors</a><a href="#models">Models</a><a href="#replies">Replies</a><a href="#gpu">GPU and memory</a><a href="#history">History</a><a href="#advanced">Advanced</a></nav>
+  <div>
+    <section id="doors">
+      <h2>Doors</h2><p class="lead">Each door is a port other programs connect to. Give clients the address in the last column.</p>
+      <table><thead><tr><th>Port</th><th>What it is for</th><th>Status</th><th>Address for clients</th></tr></thead><tbody>
+        <tr><td><input type="number" value="11434" aria-label="Port"></td><td><select aria-label="Purpose"><option>General text (cameras, tools)</option><option>Roleplay: goes first, short replies</option><option>ComfyUI images</option></select></td><td class="ok">listening</td><td><code>http://192.168.1.11:11434</code></td></tr>
+        <tr><td><input type="number" value="11435" aria-label="Port"></td><td><select aria-label="Purpose"><option>Roleplay: goes first, short replies</option></select></td><td class="ok">listening</td><td><code>http://192.168.1.11:11435</code></td></tr>
+        <tr><td><input type="number" value="8188" aria-label="Port"></td><td><select aria-label="Purpose"><option>ComfyUI images</option></select></td><td class="ok">listening</td><td><code>http://192.168.1.11:8188</code></td></tr>
+      </tbody></table>
+      <p><span class="chip add">+ Add a door</span> <span class="badge service">changing a port restarts the service</span></p>
+    </section>
+
+    <section id="models">
+      <h2>Models</h2><p class="lead">Found in your model folders. The default answers when a client names a model that does not exist.</p>
+      <table><thead><tr><th>Default</th><th>Model</th><th>Size</th><th>Also answers to</th></tr></thead><tbody>
+        <tr><td><input type="radio" name="d" checked aria-label="Default"></td><td>Qwen3.5-9B obliterated Q5_K_M <span class="vision"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>can read pictures</span></td><td>6.5 GB</td>
+          <td><span class="chip">qwen3.5-9b-obliterated</span><span class="chip">qwen/qwen3.5-9b</span><span class="chip add">+ name</span></td></tr>
+        <tr><td><input type="radio" name="d" aria-label="Default"></td><td>Qwen3.5-9B Q4_K_M</td><td>5.6 GB</td><td><span class="chip add">+ name</span></td></tr>
+        <tr><td><input type="radio" name="d" aria-label="Default"></td><td>MythoMax L2 13B Q3_K_S</td><td>5.7 GB</td><td><span class="chip add">+ name</span></td></tr>
+      </tbody></table>
+      <div class="row"><div class="what"><b>Camera name <code>qwen/qwen3.5-9b</code>: answer straight away</b><span>Turns thinking off for requests that use this name. Anything the client sets itself still wins.</span></div><label><input type="checkbox" checked> on</label></div>
+      <div class="row"><div class="what"><b>Vision file for the roleplay model</b><span>Found automatically next to Qwen3.5-9B Q4_K_M; shared with the roleplay model.</span></div><select aria-label="Vision file"><option>mmproj-Qwen3.5-9B-BF16.gguf</option><option>none</option></select></div>
+      <details><summary>Model folders (1)</summary><table><tbody><tr><td><code>/home/master/models</code></td><td>SSD, 14 GB free</td><td><span class="chip add">+ folder</span></td></tr></tbody></table></details>
+    </section>
+
+    <section id="replies">
+      <h2>Replies</h2><p class="lead">How long an answer may be. A thinking model spends a thousand tokens or more before it answers, so general text needs more room.</p>
+      <div class="row"><div class="what"><b>Roleplay door: longest reply</b><span>Asked for more? It is cut to this.</span></div><span><input type="number" value="1024"> tokens <span class="badge live">applies at once</span></span></div>
+      <div class="row"><div class="what"><b>Other doors: longest reply</b></div><span><input type="number" value="8192"> tokens <span class="badge live">applies at once</span></span></div>
+    </section>
+
+    <section id="gpu">
+      <h2>GPU and memory</h2><p class="lead">The GPU has 8 GB. These trade speed for room.</p>
+      <div class="row"><div class="what"><b>Picture reader runs on</b><span>Measured here with 12 camera frames.</span></div></div>
+      <div class="choice">
+        <label class="on"><input type="radio" name="p" checked> The GPU <small>Camera request about 49 s. Text about 12 tokens/s.</small></label>
+        <label><input type="radio" name="p"> The CPU <small>Camera request about 183 s. Text about 25 tokens/s.</small></label>
+      </div>
+      <span class="badge engine">restarts the engine (about 15 s)</span>
+      <div class="row"><div class="what"><b>Unload the model when idle for</b><span>Frees the GPU for images.</span></div><span><input type="number" value="30"> minutes <span class="badge live">applies at once</span></span></div>
+      <div class="row"><div class="what"><b>Tell an image app "GPU busy" after waiting</b></div><span><input type="number" value="600"> seconds <span class="badge live">applies at once</span></span></div>
+      <details><summary>Advanced: threads, context reserve, picture size</summary>
+        <div class="row"><div class="what"><b>CPU threads</b><span>2 is fastest while the picture reader is on the GPU.</span></div><span><input type="number" value="2"> <span class="badge engine">restarts the engine</span></span></div>
+        <div class="row"><div class="what"><b>Room kept free for a reply</b></div><span><input type="number" value="2048"> tokens</span></div>
+        <div class="row"><div class="what"><b>Most one picture may cost</b></div><span><input type="number" value="512"> tokens</span></div>
+      </details>
+    </section>
+
+    <section id="history">
+      <h2>History</h2><p class="lead">What the Now tab remembers.</p>
+      <div class="row"><div class="what"><b>Keep prompts and replies for the newest</b><span>Older ones keep their numbers but lose their text.</span></div><span><input type="number" value="50"> requests <span class="badge live">applies at once</span></span></div>
+      <p><button class="quiet">Clear all stored text now</button></p>
+    </section>
+
+    <section id="advanced">
+      <details><summary><b>Advanced</b> (addresses and folders; leave alone unless you moved something)</summary>
+        <div class="row"><div class="what"><b>ComfyUI address</b></div><input type="text" value="http://127.0.0.1:8189" aria-label="ComfyUI address"></div>
+        <div class="row"><div class="what"><b>Engine port</b></div><input type="number" value="8081"></div>
+        <div class="row"><div class="what"><b>Engine folder</b></div><input type="text" value="/home/master/ratatosk/engine"></div>
+        <div class="row"><div class="what"><b>Edit the raw settings file</b><span>For anything not shown above.</span></div><button class="quiet">Open editor</button></div>
+      </details>
+    </section>
+  </div>
+</main>
+<div class="savebar"><span class="n">3</span> unsaved changes <span class="dim">(1 restarts the engine)</span><button class="quiet">Discard</button><button class="primary">Save</button></div>
+</body>
+</html>
