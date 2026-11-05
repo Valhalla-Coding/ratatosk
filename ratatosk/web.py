@@ -11,7 +11,7 @@ from ratatosk.gateway_llm import AppContext
 from ratatosk.settings import Settings, save_settings, settings_from_dict
 
 INT_FIELDS = ("ui_port", "engine_port", "max_tokens_cap", "max_tokens_cap_plain", "idle_minutes", "reserve_gb", "image_wait_seconds", "threads",
-              "keep_content", "image_max_tokens")
+              "keep_content", "image_max_tokens", "reply_reserve")
 STR_FIELDS = ("comfy_url", "engine_dir", "default_model", "data_dir")
 PORT_FIELDS = ("ui_port", "engine_port")
 KINDS, PROFILES = ("llm", "comfy"), ("plain", "rp")

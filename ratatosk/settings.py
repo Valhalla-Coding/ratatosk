@@ -36,7 +36,8 @@ class Settings:
     data_dir: str = "data"
     keep_content: int = 50  # how many of the newest requests keep their prompt and reply text
     mmproj_files: dict = field(default_factory=dict)  # model id -> vision file, for a model with none beside it
-    image_max_tokens: int = 1024  # most context one picture may take; larger pictures are scaled down by the engine
+    image_max_tokens: int = 512  # most context one picture may take (a real camera frame measured about 500); larger ones are scaled down
+    reply_reserve: int = 2048  # context kept free for a reply when sizing the engine; a 32k context halves the text speed here
     mmproj_on_gpu: bool = False  # on the 8 GB GPU the projector costs half the text speed; on the CPU a picture takes longer
     request_defaults: dict = field(default_factory=dict)  # model name or id -> request fields to add when the client left them out
 

@@ -139,6 +139,23 @@ async def test_bad_or_huge_max_tokens_fall_back_to_the_cap(rig, aiohttp_client, 
     assert [e for e in rig.log() if e["event"] == "request"][0]["body"]["max_tokens"] == 1024
 
 
+async def test_context_reserves_room_for_a_typical_reply_not_the_whole_cap(rig, aiohttp_client):
+    # a 32k context halves the text speed on this GPU (25.1 -> about 14 tok/s), so the size must not be inflated
+    rig.settings.max_tokens_cap_plain, rig.settings.reply_reserve = 8192, 2048
+    client = await client_for(aiohttp_client, rig)
+    await (await client.post("/v1/completions", json={"model": "alpha", "prompt": "hello"})).read()
+    assert rig.db.recent(1)[0]["ctx"] == 8192  # reserving the whole 8192 would have forced 16384
+
+
+async def test_a_dozen_camera_sized_pictures_fit_in_a_16k_context(rig, aiohttp_client):
+    rig.models = [Model("alpha", rig.models[0].path, 1, rig.models[0].folder, rig.models[0].path)]
+    rig.settings.max_tokens_cap_plain, rig.settings.reply_reserve = 8192, 2048
+    assert rig.settings.image_max_tokens == 512  # measured: a real camera frame costs about 500 tokens
+    client = await client_for(aiohttp_client, rig)
+    await (await client.post("/v1/chat/completions", json=picture_request(12))).read()
+    assert rig.db.recent(1)[0]["ctx"] == 16384  # about 7k tokens of request in all, as LM Studio's log showed
+
+
 async def test_request_defaults_fill_in_only_what_the_client_left_out(rig, aiohttp_client):
     rig.settings.request_defaults = {"alpha": {"temperature": 0.3, "chat_template_kwargs": {"enable_thinking": False}},
                                      "qwen3.5-9b-obliterated": {"top_p": 0.5}}

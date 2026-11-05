@@ -149,7 +149,7 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
         if prompt_tokens is None:
             prompt_tokens = len(text) // 3
         prompt_tokens += pictures * ctx.settings.image_max_tokens  # the engine cannot count these ahead; assume the most
-        needed = needed_ctx(prompt_tokens, capped)
+        needed = needed_ctx(prompt_tokens, min(capped, ctx.settings.reply_reserve))  # a longer reply simply ends at the context limit
         if needed > ctx.scheduler.limit_bucket():
             return _error(413, f"the request needs about {needed} tokens of context; the limit is {ctx.scheduler.limit_bucket()}")
 
