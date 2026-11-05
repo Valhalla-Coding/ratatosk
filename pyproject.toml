@@ -3,6 +3,7 @@ name = "ratatosk"
 version = "0.1.0"
 description = "GPU traffic control for Idun: one queue for text and images."
 requires-python = ">=3.11"
+license = "MIT"
 dependencies = ["aiohttp>=3.10"]
 
 [project.optional-dependencies]
