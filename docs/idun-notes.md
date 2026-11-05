@@ -18,3 +18,10 @@ Ratatosk now owns the public ports on Idun. Done with the user present.
 - Verified after the switch: capability check 8/8 on 11434; ComfyUI page and `/system_stats` through 8188 (also from the LAN address); websocket handshake through 8188 gives 101; a queue request with a LAN Host and Origin gets ComfyUI's own 400, not 403; the engine stopped to make room for the image job.
 - Not yet verified: a real image generated through 8188 followed by a text request (the ComfyUI memory retest), and a real call from the camera system.
 - Rollback: `docs/rollback.md`.
+
+## After the cutover (2026-11-05)
+
+- Real traffic seen through Ratatosk: SillyTavern from Huginn (`node-fetch`, `/v1/completions`) and the camera system from Huginn (`OpenAI/Python`, `/v1/chat/completions`, 12 pictures, about 8.6k tokens in, 62 s per request).
+- An image generated through the ComfyUI API on 8188 (Realistic Vision SD 1.5, 512x512, 6 steps; 113 s the first time because the checkpoint loads from the spinning disk, 89 s the second). The text engine stepped aside for it, and after the next text request ComfyUI held 160 MB and the engine 6.2 GB.
+- `threads` must be 2: with the vision projector on the GPU, 4 threads made text slower (8.0 to 8.9 tok/s against 12.0 to 12.1 at 2). Raise it only if the projector goes back to the CPU.
+- First checkpoint load after a restart is slow because the checkpoints are on the HDD; models for ComfyUI that are used often belong on the SSD or the planned M.2.
