@@ -42,7 +42,7 @@
   .trash { background:none; color:var(--bad); padding:.3rem; border-radius:5px; } .trash:hover { background:rgba(224,100,92,.12); }
   .danger { background:var(--bad); color:#1d0907; } .addm { display:flex; gap:.5rem; } .addm input { width:20rem; max-width:50vw; }
   dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:1rem 1.2rem; max-width:26rem; } dialog::backdrop { background:rgba(0,0,0,.6); } dialog h3 { margin:0 0 .3rem; font-size:1rem; }
-  #presets { margin:.5rem 0; } .dlgbtn { display:flex; gap:.5rem; justify-content:flex-end; margin-top:.8rem; } .small { font-size:.8rem; margin:.4rem 0 0; } .err { color:var(--bad); font-size:.8rem; min-height:1.1rem; }
+  #presets { margin:.5rem 0; } .dlgbtn { display:flex; gap:.5rem; justify-content:flex-end; margin-top:.8rem; } .rcap input { width:5.5rem; } .capin { display:inline-flex; align-items:baseline; gap:.4rem; white-space:nowrap; } .small { font-size:.8rem; margin:.4rem 0 0; } .err { color:var(--bad); font-size:.8rem; min-height:1.1rem; }
   #plist { list-style:none; margin:0; padding:0; display:grid; gap:.35rem; }
   .pr, .else { display:flex; align-items:center; gap:.7rem; padding:.45rem .6rem; border:1px solid var(--line); border-radius:6px; background:var(--bg); } .else { border-style:dashed; color:var(--dim); } .else b { color:var(--text); }
   .pr .what, .else .what { flex:1; } .grip { background:none; color:var(--dim); padding:0 .2rem; cursor:grab; font-size:1.2rem; line-height:1; } .pr.drag { opacity:.4; }
@@ -58,18 +58,19 @@
 <body>
 <header><h1>Ratatosk</h1><nav><span>Now</span><span class="on">Settings</span></nav><span class="tag">MOCKUP: sample data, nothing here is saved</span></header>
 <main>
-  <nav class="toc" aria-label="Sections"><a class="on" href="#doors">Doors</a><a href="#priority">Priority</a><a href="#models">Models</a><a href="#replies">Replies</a><a href="#gpu">GPU and memory</a><a href="#history">History</a><a href="#advanced">Advanced</a></nav>
+  <nav class="toc" aria-label="Sections"><a class="on" href="#doors">Doors</a><a href="#priority">Priority</a><a href="#models">Models</a><a href="#gpu">GPU and memory</a><a href="#history">History</a><a href="#advanced">Advanced</a></nav>
   <div>
     <section id="doors">
       <h2>Doors</h2><p class="lead">Each door is a port other programs connect to. Give clients the address in the last column.</p>
-      <table><thead><tr><th>Port</th><th>What it is for</th><th>Status</th><th>Address for clients</th></tr></thead><tbody>
-        <tr class="door"><td><input type="number" value="11434" aria-label="Port"></td><td><span class="purpose"><select aria-label="Purpose"><option selected>General text (apps, tools)</option><option>Roleplay: goes first, short replies</option><option>ComfyUI images</option></select></span></td><td class="ok">listening</td><td><span class="addr"><code>http://192.168.1.11:<b class="p">11434</b></code><button class="copy" type="button" aria-label="Copy address" title="Copy address"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10.5V4a1.5 1.5 0 0 1 1.5-1.5H11"/></svg></button></span></td></tr>
-        <tr class="hint" hidden><td colspan="4"><div class="note"></div></td></tr>
-        <tr class="door"><td><input type="number" value="11435" aria-label="Port"></td><td><span class="purpose"><select aria-label="Purpose"><option>General text (apps, tools)</option><option selected>Roleplay: goes first, short replies</option><option>ComfyUI images</option></select></span></td><td class="ok">listening</td><td><span class="addr"><code>http://192.168.1.11:<b class="p">11435</b></code><button class="copy" type="button" aria-label="Copy address" title="Copy address"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10.5V4a1.5 1.5 0 0 1 1.5-1.5H11"/></svg></button></span></td></tr>
-        <tr class="hint" hidden><td colspan="4"><div class="note"></div></td></tr>
-        <tr class="door"><td><input type="number" value="8188" aria-label="Port"></td><td><span class="purpose"><select aria-label="Purpose"><option>General text (apps, tools)</option><option>Roleplay: goes first, short replies</option><option selected>ComfyUI images</option></select></span></td><td class="ok">listening</td><td><span class="addr"><code>http://192.168.1.11:<b class="p">8188</b></code><button class="copy" type="button" aria-label="Copy address" title="Copy address"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10.5V4a1.5 1.5 0 0 1 1.5-1.5H11"/></svg></button></span></td></tr>
-        <tr class="hint" hidden><td colspan="4"><div class="note"></div></td></tr>
+      <table><thead><tr><th>Port</th><th>What it is for</th><th>Longest reply</th><th>Status</th><th>Address for clients</th></tr></thead><tbody>
+        <tr class="door"><td><input type="number" value="11434" aria-label="Port"></td><td><span class="purpose"><select aria-label="Purpose"><option selected>General text (apps, tools)</option><option>Roleplay: goes first, short replies</option><option>ComfyUI images</option></select></span></td><td class="rcap"><span class="capin"><input type="number" value="8192" aria-label="Longest reply in tokens"> <small class="dim words"></small></span><span class="na dim" hidden>not used</span></td><td class="ok">listening</td><td><span class="addr"><code>http://192.168.1.11:<b class="p">11434</b></code><button class="copy" type="button" aria-label="Copy address" title="Copy address"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10.5V4a1.5 1.5 0 0 1 1.5-1.5H11"/></svg></button></span></td></tr>
+        <tr class="hint" hidden><td colspan="5"><div class="note"></div></td></tr>
+        <tr class="door"><td><input type="number" value="11435" aria-label="Port"></td><td><span class="purpose"><select aria-label="Purpose"><option>General text (apps, tools)</option><option selected>Roleplay: goes first, short replies</option><option>ComfyUI images</option></select></span></td><td class="rcap"><span class="capin"><input type="number" value="1024" aria-label="Longest reply in tokens"> <small class="dim words"></small></span><span class="na dim" hidden>not used</span></td><td class="ok">listening</td><td><span class="addr"><code>http://192.168.1.11:<b class="p">11435</b></code><button class="copy" type="button" aria-label="Copy address" title="Copy address"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10.5V4a1.5 1.5 0 0 1 1.5-1.5H11"/></svg></button></span></td></tr>
+        <tr class="hint" hidden><td colspan="5"><div class="note"></div></td></tr>
+        <tr class="door"><td><input type="number" value="8188" aria-label="Port"></td><td><span class="purpose"><select aria-label="Purpose"><option>General text (apps, tools)</option><option>Roleplay: goes first, short replies</option><option selected>ComfyUI images</option></select></span></td><td class="rcap"><span class="capin"><input type="number" value="8192" aria-label="Longest reply in tokens"> <small class="dim words"></small></span><span class="na dim" hidden>not used</span></td><td class="ok">listening</td><td><span class="addr"><code>http://192.168.1.11:<b class="p">8188</b></code><button class="copy" type="button" aria-label="Copy address" title="Copy address"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10.5V4a1.5 1.5 0 0 1 1.5-1.5H11"/></svg></button></span></td></tr>
+        <tr class="hint" hidden><td colspan="5"><div class="note"></div></td></tr>
       </tbody></table>
+      <p class="dim small">Longest reply: a reply is cut off at this length (a token is about three quarters of a word). A thinking model spends part of it thinking, so give general text more room.</p>
       <p><span class="chip add">+ Add a door</span> <span class="badge service">changing a port restarts the service</span></p>
     </section>
 
@@ -82,7 +83,7 @@
         <li class="pr" data-kind="door"><button class="grip" type="button" aria-label="Move line (Alt+Up or Alt+Down)">&#10303;</button><span class="what"><b>ComfyUI door</b> <span class="dim">port 8188</span></span><label class="dng"><input type="checkbox"> Drop everything</label><button class="rm" type="button" aria-label="Remove line">&times;</button></li>
         <li class="else"><span class="what"><b>Everything else</b> <span class="dim">waits in turn, first come first served</span></span></li>
       </ol>
-      <div class="addline"><input type="text" id="padd" placeholder="Add a client or door: type an address or a name" aria-label="Add a line" autocomplete="off"><ul id="psug" hidden></ul></div>
+      <div class="addline"><input type="text" id="padd" placeholder="Add a client or a door: click for suggestions, or type an address" aria-label="Add a line" autocomplete="off"><ul id="psug" hidden></ul></div>
       <p class="dim small">"Drop everything" cancels whatever is running the moment that line's request arrives. The cancelled request gets an error. Use it sparingly.</p>
     </section>
 
@@ -100,12 +101,6 @@
         <label>Or your own: <input type="text" id="custom" placeholder="Cindy"></label> <div id="dlgerr" class="err" role="alert"></div>
         <div class="dlgbtn"><button class="quiet" value="cancel">Cancel</button><button class="primary" id="addname" value="ok">Add name</button></div></form></dialog>
       <dialog id="deldlg"><form method="dialog"><h3>Delete <span id="delmodel"></span>?</h3><p>The file is removed from disk and cannot be brought back. Its names go with it.</p><div class="dlgbtn"><button class="quiet" value="cancel">Cancel</button><button class="danger" id="delok" value="ok">Delete file</button></div></form></dialog>
-    </section>
-
-    <section id="replies">
-      <h2>Replies</h2><p class="lead">How long an answer may be. A thinking model spends a thousand tokens or more before it answers, so general text needs more room.</p>
-      <div class="row"><div class="what"><b>Roleplay door: longest reply</b><span>Asked for more? It is cut to this.</span></div><span><input type="number" value="1024"> tokens <span class="badge live">applies at once</span></span></div>
-      <div class="row"><div class="what"><b>Other doors: longest reply</b></div><span><input type="number" value="8192"> tokens <span class="badge live">applies at once</span></span></div>
     </section>
 
     <section id="gpu">
@@ -140,9 +135,9 @@
 document.querySelectorAll("tr.door").forEach(tr=>{
   const hint=tr.nextElementSibling, sel=tr.querySelector("select"), port=tr.querySelector("input");
   const sync=()=>{const comfy=sel.value.startsWith("ComfyUI"); tr.querySelector(".p").textContent=port.value;
-    hint.hidden=!comfy; tr.classList.toggle("has-hint",comfy);
-    hint.querySelector(".note").textContent=`Clients expect ComfyUI on port 8188. Your real ComfyUI must run on a different port (now 8189, under Advanced), and clients connect here on ${port.value}.`;};
-  sel.onchange=sync; port.oninput=sync; sync();
+    hint.hidden=!comfy; tr.classList.toggle("has-hint",comfy); const cap=tr.querySelector(".rcap"); cap.querySelector(".capin").hidden=comfy; cap.querySelector(".na").hidden=!comfy; const w=()=>cap.querySelector(".words").textContent="\u2248 "+Math.round(cap.querySelector("input").value*.75).toLocaleString()+" words"; w(); cap.querySelector("input").oninput=w;
+    hint.querySelector(".note").textContent=`Apps expect ComfyUI on 8188. The real ComfyUI must use another port (now 8189, under Advanced).`;};
+  sel.onchange=()=>{const c=tr.querySelector(".rcap input");if(sel.value.startsWith("Roleplay"))c.value=1024;else if(sel.value.startsWith("General"))c.value=8192;sync();}; port.oninput=sync; sync();
   tr.querySelector(".copy").onclick=async e=>{const b=e.currentTarget,old=b.innerHTML;try{await navigator.clipboard.writeText(tr.querySelector("code").textContent);b.textContent="Copied";b.classList.add("done");setTimeout(()=>{b.innerHTML=old;b.classList.remove("done")},1500);}catch{b.textContent="Select it";}};
 });
 </script>
@@ -161,7 +156,7 @@ document.getElementById("delok").onclick=()=>gone&&gone.remove();})();
 </script>
 <script>
 (()=>{const list=document.getElementById("plist"),inp=document.getElementById("padd"),sug=document.getElementById("psug");
-const recent=[["SillyTavern","192.168.1.12 \u00b7 node-fetch","2 min ago"],["Camera system","192.168.1.12 \u00b7 OpenAI/Python","5 min ago"],["Josef's PC","192.168.1.20 \u00b7 Mozilla/5.0","3 h ago"],["ComfyUI web page","192.168.1.20 \u00b7 Mozilla/5.0 (port 8188)","yesterday"]];
+const recent=[["SillyTavern","192.168.1.12 \u00b7 node-fetch","2 min ago"],["Camera system","192.168.1.12 \u00b7 OpenAI/Python","5 min ago"],["Josef's PC","192.168.1.20 \u00b7 Mozilla/5.0","3 h ago"],["ComfyUI web page","192.168.1.20 \u00b7 Mozilla/5.0 (port 8188)","yesterday"],["Roleplay door","port 11435","a door"],["General text door","port 11434","a door"],["ComfyUI door","port 8188","a door"]];
 const grip='<button class="grip" type="button" aria-label="Move line (Alt+Up or Alt+Down)">\u283f</button>';
 const used=()=>[...list.querySelectorAll(".pr .what")].map(w=>w.textContent);
 const settle=()=>{const rows=[...list.querySelectorAll(".pr")];[...rows.filter(r=>r.classList.contains("danger")),...rows.filter(r=>!r.classList.contains("danger"))].forEach(r=>list.insertBefore(r,list.querySelector(".else")));};
