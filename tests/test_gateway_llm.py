@@ -9,7 +9,7 @@ import pytest
 
 from ratatosk.db import Db
 from ratatosk.engine import Engine
-from ratatosk.gateway_llm import SESSION, AppContext, make_llm_app
+from ratatosk.gateway_llm import SESSION, AppContext, make_llm_app, parse_reply
 from ratatosk.gpuqueue import GpuQueue
 from ratatosk.models import Model
 from ratatosk.scheduler import Scheduler
@@ -183,7 +183,7 @@ async def test_engine_that_cannot_start_gives_502(rig, aiohttp_client, monkeypat
     client = await client_for(aiohttp_client, rig)
     resp = await client.post("/v1/completions", json={"model": "alpha", "prompt": "hi"})
     assert resp.status == 502 and "error" in await resp.json()
-    assert rig.db.recent(1)[0]["status"] == "error"
+    assert rig.db.recent(1)[0]["status"] == "error" and rig.db.recent(1)[0]["error"]  # the reason is kept for the page
 
 
 async def test_rp_profile_runs_before_plain(rig, aiohttp_client):
@@ -206,3 +206,46 @@ async def test_request_logged(rig, aiohttp_client):
     assert (row["route"], row["profile"], row["model"], row["status"]) == ("11434", "rp", "alpha", "ok")
     assert row["prompt_tokens"] == len("one two three") // 3  # the engine was not running yet, so this is the estimate
     assert row["ctx"] == 8192 and row["seconds"] >= 0
+
+
+async def test_request_detail_records_origin_content_and_timing(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig, "rp")
+    await (await client.post("/v1/completions", json={"model": "alpha", "prompt": "hello there", "max_tokens": 65536},
+                             headers={"User-Agent": "surveillance/1.0"})).read()
+    d = rig.db.get(rig.db.recent(1)[0]["id"])
+    assert (d["client"], d["user_agent"], d["path"], d["stream"]) == ("127.0.0.1", "surveillance/1.0", "/v1/completions", 0)
+    assert (d["max_tokens_asked"], d["max_tokens"]) == (65536, 1024)  # what was asked, and what the cap allowed
+    assert "hello there" in d["prompt_text"] and d["reply_text"] == "hello"
+    assert d["gen_tokens"] == 1 and d["queue_seconds"] >= 0 and d["error"] is None
+
+
+async def test_streamed_reply_is_recorded_as_text(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    await (await client.post("/v1/completions", json={"model": "alpha", "prompt": "hi", "stream": True})).read()
+    d = rig.db.get(rig.db.recent(1)[0]["id"])
+    assert d["stream"] == 1 and d["reply_text"] == "t0t1t2"
+
+
+async def test_images_pass_through_but_are_stored_as_a_placeholder(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    frame = "data:image/jpeg;base64," + "A" * 5000  # a camera frame
+    await (await client.post("/v1/chat/completions", json={"model": "alpha", "messages": [{"role": "user", "content": [
+        {"type": "text", "text": "what is in this picture"}, {"type": "image_url", "image_url": {"url": frame}}]}]})).read()
+    d = rig.db.get(rig.db.recent(1)[0]["id"])
+    assert "what is in this picture" in d["prompt_text"] and "[image]" in d["prompt_text"]
+    assert "AAAA" not in d["prompt_text"]  # the frame itself is never kept
+    sent = [e for e in rig.log() if e["event"] == "request"][0]["body"]
+    assert sent["messages"][0]["content"][1]["image_url"]["url"] == frame  # and the engine still gets it whole
+
+
+def test_parse_reply_reads_text_tokens_and_speed_from_a_stream():
+    raw = (b'data: {"choices":[{"text":"a"}]}\n\n'
+           b'data: {"choices":[{"text":"b"}],"timings":{"predicted_n":2,"predicted_per_second":25.5}}\n\n'
+           b'data: [DONE]\n\n')
+    assert parse_reply(raw, "text/event-stream") == ("ab", 2, 25.5)
+
+
+def test_parse_reply_reads_a_chat_reply_and_survives_garbage():
+    raw = b'{"choices":[{"message":{"content":"hi"}}],"usage":{"completion_tokens":3}}'
+    assert parse_reply(raw, "application/json") == ("hi", 3, None)
+    assert parse_reply(b"not json at all", "application/json") == ("", None, None)

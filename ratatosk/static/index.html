@@ -24,6 +24,21 @@
   .row { display:flex; gap:.5rem; margin-bottom:.4rem; } .row > * { flex:1; } .row button { flex:0 0 auto; }
   button.act { background:var(--accent); color:#1b1306; border:0; border-radius:5px; padding:.45rem 1rem; font:inherit; cursor:pointer; }
   button.small { background:var(--line); color:var(--text); border:0; border-radius:5px; padding:.3rem .6rem; cursor:pointer; }
+  .scroll { overflow-x:auto; }
+  td, th { font-variant-numeric: tabular-nums; }
+  tr.req { cursor:pointer; } tr.req:hover, tr.req.open { background:rgba(255,255,255,.04); } .nowrap { white-space:nowrap; }
+  button.chev { background:none; border:0; color:var(--dim); padding:.35rem; min-width:32px; min-height:32px; cursor:pointer; border-radius:5px; line-height:0; }
+  button.chev svg { transition:none; } button.chev[aria-expanded="true"] svg { transform:rotate(90deg); } button.chev[aria-expanded="true"] { color:var(--accent); }
+  button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  tr.detail > td { background:var(--bg); padding:.8rem 1rem; }
+  .facts { display:grid; grid-template-columns:repeat(auto-fit, minmax(17rem, 1fr)); gap:1rem; margin-bottom:.6rem; }
+  .facts h3 { margin:0 0 .3rem; font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
+  dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:.15rem .8rem; } dt { color:var(--dim); } dd { margin:0; overflow-wrap:anywhere; }
+  details.text { margin-top:.5rem; } details.text summary { cursor:pointer; color:var(--text); padding:.25rem 0; }
+  pre { margin:.3rem 0 0; padding:.6rem .7rem; background:var(--panel); border:1px solid var(--line); border-radius:5px; max-height:20rem; overflow:auto;
+        white-space:pre-wrap; overflow-wrap:anywhere; font:.85rem/1.5 ui-monospace, monospace; }
+  .st-ok { color:var(--good); } .st-error { color:var(--bad); } .st-cancelled { color:var(--dim); }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   #msg { margin-left:.8rem; } .ok { color:var(--good); } .err { color:var(--bad); } .dim { color:var(--dim); }
 </style>
 </head>
@@ -38,7 +53,8 @@
     <div class="card"><h2>Engine</h2><div id="engine"></div></div>
     <div class="card"><h2>Queue</h2><div id="queue"></div><div id="comfy" class="dim"></div></div>
     <div class="card"><h2>Recent requests</h2>
-      <table><thead><tr><th>When</th><th>Route</th><th>Model</th><th>Context</th><th>Tokens in</th><th>Seconds</th><th>Status</th></tr></thead><tbody id="recent"></tbody></table></div>
+      <div class="scroll"><table><thead><tr><th><span class="sr">Details</span></th><th>When</th><th>Route</th><th>Model</th><th>Context</th><th>In</th><th>Out</th><th>Seconds</th><th>tok/s</th><th>Status</th></tr></thead><tbody id="recent"></tbody></table></div>
+      <div class="dim" id="recent-note"></div></div>
   </section>
   <section id="settings">
     <div class="card"><h2>Routes (listening port to backend)</h2><div id="routes"></div><button class="small" onclick="addRoute()">+ route</button>
@@ -51,7 +67,7 @@
 </main>
 <script>
 const $ = id => document.getElementById(id);
-const NUM = ["ui_port","engine_port","max_tokens_cap","idle_minutes","reserve_gb","image_wait_seconds","threads"];
+const NUM = ["ui_port","engine_port","max_tokens_cap","idle_minutes","reserve_gb","image_wait_seconds","threads","keep_content"];
 const TXT = ["comfy_url","engine_dir","default_model","data_dir"];
 let routes = [];
 
@@ -59,7 +75,83 @@ function show(name) {
   for (const s of ["now","settings"]) { $(s).classList.toggle("on", s === name); $("tab-" + s).classList.toggle("on", s === name); }
   if (name === "settings") loadSettings();
 }
-function td(tr, text) { const c = document.createElement("td"); c.textContent = text; tr.appendChild(c); }
+const CHEVRON = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const fmt = (v, digits = 1) => v === null || v === undefined ? "-" : Number(v).toFixed(digits);
+const localTime = ts => new Date(ts.replace(" ", "T") + "Z").toLocaleString("sv-SE");  // the log stores UTC
+let recent = [], recentKey = "", keepContent = 50;
+const open = new Set(), details = {};
+
+function cell(tr, text, cls) { const c = document.createElement("td"); c.textContent = text; if (cls) c.className = cls; tr.appendChild(c); return c; }
+
+function setRecent(rows) {
+  const key = JSON.stringify(rows.map(r => [r.id, r.status, r.has_content]));
+  if (key === recentKey) return;  // nothing new: leave the table alone so text selection and scrolling survive
+  recentKey = key; recent = rows; drawRecent();
+}
+
+async function toggle(id) {
+  if (open.has(id)) open.delete(id);
+  else {
+    open.add(id);
+    if (!details[id]) {
+      try { details[id] = await (await fetch("/api/requests/" + id)).json(); } catch (e) { details[id] = { load_error: true }; }
+    }
+  }
+  drawRecent(id);
+}
+
+function facts(title, pairs) {
+  const box = document.createElement("div"), h = document.createElement("h3"), dl = document.createElement("dl");
+  h.textContent = title;
+  for (const [k, v] of pairs) { const dt = document.createElement("dt"), dd = document.createElement("dd"); dt.textContent = k; dd.textContent = v; dl.append(dt, dd); }
+  box.append(h, dl); return box;
+}
+
+function textBlock(title, text, isOpen) {
+  const det = document.createElement("details"), sum = document.createElement("summary"), pre = document.createElement("pre");
+  det.className = "text"; det.open = isOpen; sum.textContent = title + " (" + text.length.toLocaleString("sv-SE") + " characters)"; pre.textContent = text;
+  det.append(sum, pre); return det;
+}
+
+function detailView(d, r) {
+  const wrap = document.createElement("div");
+  if (!d) { wrap.textContent = "Loading..."; return wrap; }
+  if (d.load_error) { wrap.textContent = "Could not load the details."; return wrap; }
+  const grid = document.createElement("div"); grid.className = "facts";
+  grid.append(
+    facts("Where it came from", [["Client", d.client || "unknown"], ["Program", d.user_agent || "unknown"], ["Endpoint", d.path || "unknown"],
+      ["Route", r.route + " (" + r.profile + ")"], ["Reply", d.stream ? "streamed" : "all at once"]]),
+    facts("How it ran", [["Waited before start", fmt(d.queue_seconds) + " s"], ["Total time", fmt(d.seconds) + " s"], ["Context", String(d.ctx)],
+      ["Tokens in / out", d.prompt_tokens + " / " + d.gen_tokens], ["Speed", d.tokens_per_second == null ? "-" : fmt(d.tokens_per_second) + " tok/s"],
+      ["Reply length", d.max_tokens_asked ? "asked for " + d.max_tokens_asked + ", allowed " + d.max_tokens : "not asked, allowed " + d.max_tokens]]));
+  wrap.appendChild(grid);
+  if (d.error) { const e = document.createElement("div"); e.className = "st-error"; e.textContent = "Problem: " + d.error; wrap.appendChild(e); }
+  if (d.prompt_text || d.reply_text) {
+    if (d.prompt_text) wrap.appendChild(textBlock("Prompt", d.prompt_text, false));
+    if (d.reply_text) wrap.appendChild(textBlock("Reply", d.reply_text, true));
+  } else { const n = document.createElement("div"); n.className = "dim"; n.textContent = "The text is only kept for the newest " + keepContent + " requests."; wrap.appendChild(n); }
+  return wrap;
+}
+
+function drawRecent(focusId) {
+  const keep = focusId ?? document.activeElement?.dataset?.reqId;  // a redraw must not lose the keyboard position
+  const body = $("recent"); body.replaceChildren();
+  for (const r of recent) {
+    const isOpen = open.has(r.id), tr = document.createElement("tr"), first = document.createElement("td"), btn = document.createElement("button");
+    tr.className = "req"; tr.onclick = () => toggle(r.id);
+    btn.className = "chev"; btn.dataset.reqId = r.id; btn.setAttribute("aria-expanded", String(isOpen)); btn.setAttribute("aria-controls", "detail-" + r.id);
+    btn.setAttribute("aria-label", (isOpen ? "Hide" : "Show") + " details of request " + r.id + " from " + (r.client || "an unknown client"));
+    btn.innerHTML = CHEVRON; first.appendChild(btn); tr.appendChild(first);
+    cell(tr, localTime(r.ts), "nowrap"); cell(tr, r.route + " " + r.profile, "nowrap");
+    [r.model, r.ctx, r.prompt_tokens, r.gen_tokens, fmt(r.seconds), fmt(r.tokens_per_second)].forEach(v => cell(tr, v));
+    if (isOpen) tr.classList.add("open");
+    cell(tr, r.status, "st-" + r.status);
+    body.appendChild(tr);
+    if (isOpen) { const dr = document.createElement("tr"), c = cell(dr, ""); dr.id = "detail-" + r.id; dr.className = "detail"; c.colSpan = 10; c.appendChild(detailView(details[r.id], r)); body.appendChild(dr); }
+  }
+  $("recent-note").textContent = recent.length ? "Click a row to see where the request came from and what was said." : "No requests yet.";
+  if (keep) document.querySelector('[data-req-id="' + keep + '"]')?.focus();
+}
 
 async function refresh() {
   try {
@@ -69,9 +161,7 @@ async function refresh() {
     $("engine").textContent = d.engine ? d.engine.model + " at " + d.engine.ctx + " tokens of context" : "No model loaded";
     $("queue").textContent = (d.queue.running ? "Running: " + d.queue.running : "Idle") + (d.queue.pending.length ? "   Waiting: " + d.queue.pending.join(", ") : "");
     $("comfy").textContent = d.comfy_pending === null ? "ComfyUI: not reachable" : "ComfyUI jobs: " + d.comfy_pending;
-    const body = $("recent"); body.replaceChildren();
-    for (const r of d.recent) { const tr = document.createElement("tr");
-      [r.ts, r.route + " " + r.profile, r.model, r.ctx, r.prompt_tokens, (r.seconds || 0).toFixed(1), r.status].forEach(v => td(tr, v)); body.appendChild(tr); }
+    setRecent(d.recent);
   } catch (e) { $("queue").textContent = "Cannot reach Ratatosk"; }
 }
 

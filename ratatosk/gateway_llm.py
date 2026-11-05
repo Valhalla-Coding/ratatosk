@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from dataclasses import dataclass
 from typing import Callable
@@ -33,20 +34,58 @@ def _prompt_text(body: dict) -> str:
         for message in body["messages"]:
             content = message.get("content") if isinstance(message, dict) else None  # null for tool-call turns
             if isinstance(content, list):
-                content = " ".join(p.get("text", "") for p in content if isinstance(p, dict))
+                content = " ".join("[image]" if p.get("type") in ("image_url", "input_image") else str(p.get("text", ""))
+                                   for p in content if isinstance(p, dict))
             parts.append(content if isinstance(content, str) else "")
         return "\n".join(parts)
     prompt = body.get("prompt", "")
     return prompt if isinstance(prompt, str) else "\n".join(map(str, prompt))
 
 
-def _capped_tokens(body: dict, cap: int) -> int:
-    """The reply length to allow: what the client asked for if it is a sensible number, never more than the cap."""
+def _asked_tokens(body: dict) -> int | None:
+    """The reply length the client asked for, if it is a sensible number."""
     def positive(value):
         return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
 
-    asked = positive(body.get("max_tokens")) or positive(body.get("n_predict")) or positive(body.get("max_completion_tokens"))
-    return min(asked or cap, cap)  # -1 would mean "until the context is full" to llama-server
+    return positive(body.get("max_tokens")) or positive(body.get("n_predict")) or positive(body.get("max_completion_tokens"))
+
+
+def _capped_tokens(body: dict, cap: int) -> int:
+    """The reply length to allow: what the client asked for, never more than the cap."""
+    return min(_asked_tokens(body) or cap, cap)  # -1 would mean "until the context is full" to llama-server
+
+
+def _clip(text: str, keep: int = 120_000) -> str:
+    """A very long prompt is stored as its beginning and its end, which is where the instructions usually are."""
+    return text if len(text) <= keep else text[:20_000] + f"\n[... {len(text) - keep} characters left out ...]\n" + text[-100_000:]
+
+
+def parse_reply(raw: bytes, content_type: str) -> tuple[str, int | None, float | None]:
+    """The reply text, its length in tokens and its speed, from a streamed or a plain completion response."""
+    if "event-stream" in content_type:
+        docs = []
+        for line in raw.decode("utf-8", "replace").splitlines():
+            if line.startswith("data:") and "[DONE]" not in line:
+                try:
+                    docs.append(json.loads(line[5:]))
+                except ValueError:
+                    pass
+    else:
+        try:
+            docs = [json.loads(raw)]
+        except ValueError:
+            docs = []
+    pieces, usage, timings = [], None, None
+    for doc in docs:
+        if not isinstance(doc, dict):
+            continue
+        for choice in doc.get("choices") or []:
+            piece = choice.get("text") or (choice.get("delta") or {}).get("content") or (choice.get("message") or {}).get("content")
+            if isinstance(piece, str):
+                pieces.append(piece)
+        usage, timings = doc.get("usage") or usage, doc.get("timings") or timings
+    tokens = (usage or {}).get("completion_tokens") or (timings or {}).get("predicted_n")
+    return "".join(pieces), tokens, (timings or {}).get("predicted_per_second")
 
 
 def _error(status: int, message: str) -> web.Response:
@@ -81,6 +120,7 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
         if not model.path.exists():
             return _error(503, f"the file for model {model.id!r} is missing; its drive is probably not mounted")
 
+        asked = _asked_tokens(body)
         capped = _capped_tokens(body, ctx.settings.max_tokens_cap)
         body["max_tokens"] = capped
         body.pop("n_predict", None)
@@ -95,15 +135,19 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
             return _error(413, f"the request needs about {needed} tokens of context; the limit is {ctx.scheduler.limit_bucket()}")
 
         started, status, reply_started = time.monotonic(), "ok", False
+        waited, error, content_type, raw = None, None, "", bytearray()  # kept for the request log
 
         async def forward(engine_url: str):
-            nonlocal reply_started
+            nonlocal reply_started, waited, content_type
+            waited = time.monotonic() - started  # includes freeing ComfyUI and starting the engine, if that was needed
             async with request.app[SESSION].post(engine_url + request.path, json=body) as upstream:
-                resp = web.StreamResponse(status=upstream.status, headers={
-                    "Content-Type": upstream.headers.get("Content-Type", "application/json")})
+                content_type = upstream.headers.get("Content-Type", "application/json")
+                resp = web.StreamResponse(status=upstream.status, headers={"Content-Type": content_type})
                 await resp.prepare(request)
                 reply_started = True
                 async for chunk in upstream.content.iter_any():
+                    if len(raw) < 400_000:
+                        raw.extend(chunk)
                     await resp.write(chunk)
                 await resp.write_eof()
                 return resp
@@ -111,20 +155,25 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
         try:
             return await ctx.scheduler.run_llm(priority, model, needed, forward)
         except EngineError as exc:
-            status = "error"
+            status, error = "error", str(exc)
             return _error(502, str(exc))
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-            status = "error"
+            status, error = "error", f"{type(exc).__name__}: {exc}"
             if not reply_started:
                 return _error(502, f"the engine did not answer: {exc}")
             raise  # the reply was already under way; dropping the connection is all that is left
         except asyncio.CancelledError:
-            status = "cancelled"
+            status, error = "cancelled", "the client disconnected"
             raise
         finally:
+            reply, out_tokens, speed = parse_reply(bytes(raw), content_type)
             ctx.db.log_request(str(route.port), route.profile, model.id,
                                ctx.engine.loaded[1] if ctx.engine.loaded else 0,
-                               prompt_tokens, 0, time.monotonic() - started, status)
+                               prompt_tokens, out_tokens or 0, time.monotonic() - started, status,
+                               client=request.remote, user_agent=request.headers.get("User-Agent", "")[:200],
+                               path=request.path, stream=int(bool(body.get("stream"))), max_tokens_asked=asked,
+                               max_tokens=capped, queue_seconds=waited, tokens_per_second=speed, error=error,
+                               prompt_text=_clip(text), reply_text=reply or None)
 
     app = web.Application(client_max_size=16 * 2**20)  # a long chat history is far bigger than aiohttp's 1 MiB default
     app.on_startup.append(start_session)

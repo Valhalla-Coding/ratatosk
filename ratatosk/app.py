@@ -44,7 +44,7 @@ async def start(settings_path: Path) -> Service:
     queue, engine = GpuQueue(), Engine(settings)
     comfy = Comfy(settings.comfy_url, session)
     scheduler = Scheduler(settings, queue, engine, comfy)
-    ctx = AppContext(settings, scheduler, engine, Db(Path(settings.data_dir) / "ratatosk.db"),
+    ctx = AppContext(settings, scheduler, engine, Db(Path(settings.data_dir) / "ratatosk.db", settings.keep_content),
                      lambda: scan([Path(f["path"]) for f in settings.model_folders]))
     queue.start()
     service = Service(engine, queue, session, asyncio.get_running_loop().create_task(scheduler.idle_loop()))

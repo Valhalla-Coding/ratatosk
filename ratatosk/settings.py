@@ -33,6 +33,7 @@ class Settings:
     reserve_gb: int = 5
     image_wait_seconds: int = 600
     data_dir: str = "data"
+    keep_content: int = 50  # how many of the newest requests keep their prompt and reply text
 
 
 def load_settings(path: Path) -> Settings:

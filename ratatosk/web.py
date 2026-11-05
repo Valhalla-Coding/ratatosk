@@ -10,7 +10,8 @@ from ratatosk.comfy import Comfy
 from ratatosk.gateway_llm import AppContext
 from ratatosk.settings import Settings, save_settings, settings_from_dict
 
-INT_FIELDS = ("ui_port", "engine_port", "max_tokens_cap", "idle_minutes", "reserve_gb", "image_wait_seconds", "threads")
+INT_FIELDS = ("ui_port", "engine_port", "max_tokens_cap", "idle_minutes", "reserve_gb", "image_wait_seconds", "threads",
+              "keep_content")
 STR_FIELDS = ("comfy_url", "engine_dir", "default_model", "data_dir")
 PORT_FIELDS = ("ui_port", "engine_port")
 KINDS, PROFILES = ("llm", "comfy"), ("plain", "rp")
@@ -91,8 +92,12 @@ def make_ui_app(ctx: AppContext, comfy: Comfy, settings_path: Path,
             "engine": {"model": Path(loaded[0]).name, "ctx": loaded[1]} if loaded else None,
             "comfy_pending": pending,
             "gpu": await gpu_reader(),
-            "recent": ctx.db.recent(10),
+            "recent": ctx.db.recent(20),
         })
+
+    async def request_detail(request: web.Request):
+        row = ctx.db.get(int(request.match_info["id"]))
+        return web.json_response(row) if row else web.json_response({"error": "no such request"}, status=404)
 
     async def get_settings(_):
         return web.json_response(asdict(ctx.settings))
@@ -116,6 +121,7 @@ def make_ui_app(ctx: AppContext, comfy: Comfy, settings_path: Path,
     app = web.Application()
     app.router.add_get("/", index)
     app.router.add_get("/api/status", status)
+    app.router.add_get(r"/api/requests/{id:\d+}", request_detail)
     app.router.add_get("/api/settings", get_settings)
     app.router.add_put("/api/settings", put_settings)
     return app

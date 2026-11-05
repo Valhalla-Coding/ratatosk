@@ -80,6 +80,16 @@ async def test_settings_put_rejects_port_clashes_that_would_crash_the_service(ri
     assert (rig.settings.ui_port, [r.port for r in rig.settings.routes]) == before  # nothing was applied
 
 
+async def test_request_detail_endpoint(rig):
+    rid = rig.db.log_request("11434", "plain", "m", 8192, 3, 4, 1.0, "ok", client="192.168.1.9", prompt_text="P", reply_text="R")
+    recent = (await (await rig.client.get("/api/status")).json())["recent"]
+    assert recent[0]["has_content"] == 1 and "prompt_text" not in recent[0]  # the list stays light
+    detail = await (await rig.client.get(f"/api/requests/{rid}")).json()
+    assert (detail["client"], detail["prompt_text"], detail["reply_text"]) == ("192.168.1.9", "P", "R")
+    assert (await rig.client.get("/api/requests/9999")).status == 404
+    assert (await rig.client.get("/api/requests/abc")).status == 404
+
+
 async def test_index_has_both_tabs(rig):
     text = await (await rig.client.get("/")).text()
     assert "Now" in text and "Settings" in text
