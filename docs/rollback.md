@@ -13,3 +13,7 @@ other clients need no change, because Ratatosk took over the same ports (11434 a
    If LM Studio was already removed, start the engine by hand instead:
    `LD_LIBRARY_PATH=~/ratatosk/engine/backend:~/ratatosk/engine/vendor ~/ratatosk/engine/backend/llama-server --model <file.gguf> --ctx-size 16384 --host 0.0.0.0 --port 11434 --fit on --flash-attn on --parallel 1`
 4. Check: `curl localhost:11434/v1/models` and open `http://192.168.1.11:8188`.
+
+## Back from the Settings page release (2026-11-06)
+
+On the machine, as the user that runs Ratatosk: `cd ~/ratatosk && rm -rf app && mv app.old app && venv/bin/pip install --no-deps --force-reinstall ./app`, copy `data/settings.before-settings-page.json` over `data/settings.json`, then `systemctl --user restart ratatosk`. `app-before-2026-11-06.tgz` holds the same source if `app.old` is gone.
