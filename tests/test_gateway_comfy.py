@@ -125,3 +125,20 @@ async def test_ws_echo_both_directions(rig):
     async with rig.client.ws_connect("/ws") as ws:
         await ws.send_str("hi")
         assert (await ws.receive_str()) == "echo:hi"
+
+
+async def test_drop_line_interrupts_comfy_clears_its_queue_and_runs_at_once(rig):
+    from ratatosk.priority import Rank
+    rig.state.job_seconds = 30  # an image that would hold the GPU for a long time
+    rig.state.pending = 2
+    resp = await rig.client.post("/prompt", json={"prompt": {}})
+    assert resp.status == 200  # ComfyUI has the job; Ratatosk now holds the GPU until it finishes
+    seen = []
+
+    async def urgent(url):
+        seen.append("ran")
+        return "done"
+
+    result = await asyncio.wait_for(rig.scheduler.run_llm(Rank(-1000, True, "boss"), MODEL, 5000, urgent), 5)
+    assert result == "done" and seen == ["ran"]
+    assert rig.state.interrupts == 1 and rig.state.cleared == 1

@@ -45,6 +45,18 @@ class Db:
         """Newest first, without the (large) prompt and reply text; `has_content` says whether they are still kept."""
         return [dict(r) for r in self._con.execute(f"SELECT {self._light} FROM requests ORDER BY id DESC LIMIT ?", (limit,))]
 
+    def recent_clients(self, limit: int = 30) -> list[dict]:
+        """Who has been calling, newest first: one entry per address and program, for the priority list's suggestions."""
+        rows = self._con.execute(
+            "SELECT client, COALESCE(user_agent, '') AS agent, COUNT(*) AS count, MAX(ts) AS last_seen FROM requests "
+            "WHERE client IS NOT NULL GROUP BY client, COALESCE(user_agent, '') ORDER BY MAX(id) DESC LIMIT ?", (limit,))
+        return [dict(r) for r in rows]
+
+    def door_activity(self) -> dict[str, dict]:
+        """Per door (as the port text it was logged under): requests today and the time of the last one (UTC)."""
+        rows = self._con.execute("SELECT route, SUM(date(ts) = date('now')) AS today, MAX(ts) AS last_seen FROM requests GROUP BY route")
+        return {r["route"]: {"today": r["today"], "last_seen": r["last_seen"]} for r in rows}
+
     def get(self, request_id: int) -> dict | None:
         row = self._con.execute("SELECT * FROM requests WHERE id = ?", (request_id,)).fetchone()
         return dict(row) if row else None

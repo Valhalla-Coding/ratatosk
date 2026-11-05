@@ -19,6 +19,8 @@ class ComfyState:
     pending: int = 0
     job_seconds: float = 0.05
     freed: list = field(default_factory=list)
+    interrupts: int = 0
+    cleared: int = 0
     prompts: list = field(default_factory=list)
     prompt_times: list = field(default_factory=list)  # time.monotonic() when each /prompt arrived
     vram_total: int = 8_000_000_000
@@ -47,6 +49,17 @@ def make_app(state: ComfyState) -> web.Application:
             state.torch_held = 32_000_000
 
         asyncio.get_running_loop().create_task(release())
+        return web.json_response({})
+
+    async def interrupt(_):
+        state.interrupts += 1
+        state.running = 0
+        return web.json_response({})
+
+    async def clear_queue(request):
+        if (await request.json()).get("clear"):
+            state.cleared += 1
+            state.pending = 0
         return web.json_response({})
 
     async def prompt(request):
@@ -80,6 +93,8 @@ def make_app(state: ComfyState) -> web.Application:
     app = web.Application(middlewares=[origin_only], client_max_size=100 * 2**20)
     app.router.add_get("/queue", queue)
     app.router.add_post("/free", free)
+    app.router.add_post("/interrupt", interrupt)
+    app.router.add_post("/queue", clear_queue)
     app.router.add_post("/prompt", prompt)
     app.router.add_get("/system_stats", stats)
     app.router.add_post("/upload/image", upload)

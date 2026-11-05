@@ -9,6 +9,14 @@ class Route:
     port: int
     kind: str  # "llm" or "comfy"
     profile: str = "plain"  # "plain" or "rp"
+    max_tokens: int | None = None  # longest reply on this door; None falls back to the old per-purpose caps
+    allow: dict = field(default_factory=lambda: {"vision": True, "reasoning": True, "tools": True})
+
+
+def default_priority(routes: list["Route"]) -> list[dict]:
+    """Roleplay doors first, then other text doors, then image doors: the order Ratatosk always used."""
+    rank = lambda r: 0 if r.kind == "llm" and r.profile == "rp" else 1 if r.kind == "llm" else 2
+    return [{"door": r.port} for r in sorted(routes, key=rank)]
 
 
 def _default_routes() -> list[Route]:
@@ -40,6 +48,13 @@ class Settings:
     reply_reserve: int = 2048  # context kept free for a reply when sizing the engine; a 32k context halves the text speed here
     mmproj_on_gpu: bool = False  # on the 8 GB GPU the projector costs half the text speed; on the CPU a picture takes longer
     request_defaults: dict = field(default_factory=dict)  # model name or id -> request fields to add when the client left them out
+    priority: list | None = None  # ordered lines, first goes first; None means default_priority(routes), [] means no lines
+
+    def rules(self) -> list[dict]:
+        return default_priority(self.routes) if self.priority is None else self.priority
+
+    def max_tokens_for(self, route: Route) -> int:
+        return route.max_tokens or (self.max_tokens_cap if route.profile == "rp" else self.max_tokens_cap_plain)
 
 
 def load_settings(path: Path) -> Settings:

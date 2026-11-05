@@ -1,5 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
+
+from ratatosk.gguf import capabilities_from_template, read_chat_template
 
 
 @dataclass(frozen=True)
@@ -9,6 +12,7 @@ class Model:
     size: int
     folder: Path
     mmproj: Path | None = None  # the vision file that lets the model read pictures
+    capabilities: dict = field(default_factory=dict, compare=False)  # vision, tools, reasoning; empty when not read
 
 
 def _vision_file(model_path: Path, override: str | None) -> Path | None:
@@ -17,6 +21,12 @@ def _vision_file(model_path: Path, override: str | None) -> Path | None:
         return Path(override) if Path(override).is_file() else None
     siblings = sorted(model_path.parent.glob("mmproj*.gguf"))
     return siblings[0] if siblings else None
+
+
+@lru_cache(maxsize=256)
+def _template_caps(path: str, mtime_ns: int, size: int, has_vision: bool) -> tuple:
+    """Reading the header costs a moment; a model file does not change, so remember the answer."""
+    return tuple(capabilities_from_template(read_chat_template(Path(path)), has_vision).items())
 
 
 def scan(folders: list[Path], mmproj_files: dict | None = None) -> list[Model]:
@@ -30,7 +40,9 @@ def scan(folders: list[Path], mmproj_files: dict | None = None) -> list[Model]:
         for p in sorted(folder.rglob("*.gguf")):
             if "mmproj" in p.name.lower():
                 continue
-            found.append(Model(p.stem.lower(), p, p.stat().st_size, folder, _vision_file(p, (mmproj_files or {}).get(p.stem.lower()))))
+            st, vision = p.stat(), _vision_file(p, (mmproj_files or {}).get(p.stem.lower()))
+            caps = dict(_template_caps(str(p), st.st_mtime_ns, st.st_size, vision is not None))
+            found.append(Model(p.stem.lower(), p, st.st_size, folder, vision, caps))
     return found
 
 

@@ -135,3 +135,44 @@ async def test_snapshot_shape(q):
     gate.set()
     await asyncio.gather(blocker, a, b)
     assert q.snapshot() == {"running": None, "pending": []}
+
+
+async def test_preempt_job_cancels_the_running_job_and_its_caller_learns_who(q):
+    from ratatosk.gpuqueue import Preempted
+    gate, order = asyncio.Event(), []
+    victim = asyncio.create_task(q.submit(Job("victim", P_LLM, gate.wait)))
+    await asyncio.sleep(0.01)
+    result = await asyncio.wait_for(q.submit(Job("urgent", -1000, recorder(order, "urgent"), preempt=True, owner="me")), 2)
+    assert result == "urgent"
+    with pytest.raises(Preempted) as caught:
+        await victim
+    assert caught.value.by == "me"
+
+
+async def test_preempt_job_waits_when_the_running_job_ranks_as_high(q):
+    gate, order = asyncio.Event(), []
+    first = asyncio.create_task(q.submit(Job("first", -1000, gate.wait, preempt=True, owner="a")))
+    await asyncio.sleep(0.01)
+    second = asyncio.create_task(q.submit(Job("second", -999, recorder(order, "second"), preempt=True, owner="b")))
+    await asyncio.sleep(0.05)
+    assert order == [] and not first.done()
+    gate.set()
+    await asyncio.wait_for(asyncio.gather(first, second), 2)
+    assert order == ["second"]
+
+
+async def test_preempting_a_job_that_is_holding_the_gpu_calls_its_cleanup(q):
+    events, hold_open = [], asyncio.Event()
+
+    async def run():
+        return "queued"
+
+    async def after():
+        await hold_open.wait()
+
+    async def on_preempt():
+        events.append("interrupted")
+
+    assert await q.submit(Job("image", P_IMAGE, run, after, on_preempt=on_preempt)) == "queued"
+    await asyncio.wait_for(q.submit(Job("urgent", -1000, recorder(events, "urgent"), preempt=True, owner="me")), 2)
+    assert events == ["interrupted", "urgent"]

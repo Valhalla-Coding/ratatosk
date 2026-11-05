@@ -8,6 +8,7 @@ from ratatosk.comfy import Comfy
 from ratatosk.engine import Engine
 from ratatosk.gpuqueue import P_IMAGE, P_LLM, GpuQueue, Job
 from ratatosk.models import Model
+from ratatosk.priority import Rank
 from ratatosk.settings import Settings
 
 RECENT_SECONDS = 600
@@ -16,6 +17,10 @@ IMAGE_HOLD_MAX_SECONDS = 1800  # a wedged ComfyUI must not hold the GPU forever
 
 class GpuBusy(Exception):
     pass
+
+
+def _as_rank(value: "Rank | int") -> Rank:
+    return value if isinstance(value, Rank) else Rank(value, False, "")
 
 
 class Scheduler:
@@ -33,7 +38,9 @@ class Scheduler:
     def limit_bucket(self) -> int:
         return BUCKETS[-1]
 
-    async def run_llm(self, priority: int, model: Model, needed: int, handler: Callable[[str], Awaitable[Any]]) -> Any:
+    async def run_llm(self, rank: "Rank | int", model: Model, needed: int, handler: Callable[[str], Awaitable[Any]]) -> Any:
+        rank = _as_rank(rank)
+
         async def run():
             now = self.clock()
             current = self.engine.loaded[1] if self.engine.loaded else None
@@ -57,9 +64,10 @@ class Scheduler:
             finally:
                 self._last_activity = self.clock()
 
-        return await self.queue.submit(Job(f"llm:{model.id}", priority, run))
+        return await self.queue.submit(Job(f"llm:{model.id}", rank.priority, run, preempt=rank.preempt, owner=rank.label, door=rank.door))
 
-    async def run_image(self, handler: Callable[[], Awaitable[Any]]) -> Any:
+    async def run_image(self, handler: Callable[[], Awaitable[Any]], rank: "Rank | int" = P_IMAGE) -> Any:
+        rank = _as_rank(rank)
         started = asyncio.Event()
 
         async def run():
@@ -78,7 +86,8 @@ class Scheduler:
                 await asyncio.sleep(self.poll_seconds)
             self._last_activity = self.clock()
 
-        task = asyncio.ensure_future(self.queue.submit(Job("image", P_IMAGE, run, after)))
+        job = Job("image", rank.priority, run, after, preempt=rank.preempt, owner=rank.label, door=rank.door, on_preempt=lambda: self.comfy.interrupt())
+        task = asyncio.ensure_future(self.queue.submit(job))
         try:
             try:
                 await asyncio.wait_for(started.wait(), self.settings.image_wait_seconds)

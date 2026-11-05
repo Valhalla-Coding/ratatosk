@@ -4,6 +4,8 @@ import aiohttp
 from aiohttp import WSMsgType, web
 
 from ratatosk.gateway_llm import AppContext
+from ratatosk.gpuqueue import Preempted
+from ratatosk.priority import rank_request
 from ratatosk.scheduler import GpuBusy
 from ratatosk.settings import Route
 
@@ -38,9 +40,12 @@ def make_comfy_app(route: Route, ctx: AppContext) -> web.Application:
                 return web.Response(body=await up.read(), status=up.status, headers=_clean(up.headers))
 
         try:
-            return await ctx.scheduler.run_image(forward)
+            rank = rank_request(ctx.settings, route, request.remote, request.headers.get("User-Agent", ""))
+            return await ctx.scheduler.run_image(forward, rank)
         except GpuBusy as exc:
             return web.json_response({"error": f"GPU busy: {exc}"}, status=503)
+        except Preempted as exc:
+            return web.json_response({"error": str(exc)}, status=503)
 
     async def proxy_ws(request: web.Request):
         server = web.WebSocketResponse(max_msg_size=0)  # ComfyUI sends large preview frames

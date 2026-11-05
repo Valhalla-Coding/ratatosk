@@ -10,7 +10,8 @@ from aiohttp import web
 from ratatosk.buckets import BUCKETS, needed_ctx
 from ratatosk.db import Db
 from ratatosk.engine import Engine, EngineError
-from ratatosk.gpuqueue import P_LLM, P_RP
+from ratatosk.gpuqueue import Preempted
+from ratatosk.priority import rank_request
 from ratatosk.models import Model, resolve
 from ratatosk.scheduler import Scheduler
 from ratatosk.settings import Route, Settings
@@ -138,12 +139,28 @@ def parse_reply(raw: bytes, content_type: str) -> tuple[str, int | None, float |
     return "".join(pieces), tokens, timed.get("predicted_per_second")
 
 
+TOOL_FIELDS = ("tools", "tool_choice", "functions", "function_call")
+
+
+def apply_allow(body: dict, allow: dict, can_reason: bool) -> str | None:
+    """Take out what a door does not allow. Returns an error message when the request cannot be served at all."""
+    if not allow.get("vision", True) and _count_pictures(body):
+        return "pictures are turned off on this door"
+    if not allow.get("tools", True):
+        for field in TOOL_FIELDS:
+            body.pop(field, None)
+    if not allow.get("reasoning", True) and can_reason:  # forced: the client's own setting does not win here
+        body["chat_template_kwargs"] = {**(body.get("chat_template_kwargs") or {}), "enable_thinking": False}
+    return None
+
+
 def _error(status: int, message: str) -> web.Response:
     return web.json_response({"error": message}, status=status)
 
 
 def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
-    priority = P_RP if route.profile == "rp" else P_LLM
+    def rank_of(request: web.Request):
+        return rank_request(ctx.settings, route, request.remote, request.headers.get("User-Agent", ""))
 
     async def start_session(app):
         # No total timeout: a slow model needs minutes for one reply, and the default of 300 s would cut it off.
@@ -176,12 +193,15 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
                 body[key] = {**value, **body[key]}
             elif key not in body:
                 body[key] = value
+        refused = apply_allow(body, route.allow, getattr(model, "capabilities", {}).get("reasoning", True))
+        if refused:
+            return _error(400, refused)
         pictures = _count_pictures(body)
         if pictures and model.mmproj is None:
             return _error(400, f"model {model.id!r} cannot read pictures: it has no vision file "
                                "(put one beside it, or set it under mmproj_files in Settings)")
         asked = _asked_tokens(body)
-        capped = _capped_tokens(body, ctx.settings.max_tokens_cap if route.profile == "rp" else ctx.settings.max_tokens_cap_plain)
+        capped = _capped_tokens(body, ctx.settings.max_tokens_for(route))
         for field in LENGTH_FIELDS:  # the cap goes into whatever this API calls the reply length, and into any other the client set
             if field in body or field == CAP_FIELD.get(request.path):
                 body[field] = capped
@@ -213,7 +233,12 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
                 return resp
 
         try:
-            return await ctx.scheduler.run_llm(priority, model, needed, forward)
+            return await ctx.scheduler.run_llm(rank_of(request), model, needed, forward)
+        except Preempted as exc:
+            status, error = "dropped", str(exc)
+            if not reply_started:
+                return _error(503, str(exc))
+            raise  # part of the reply is out already; the connection is cut
         except EngineError as exc:
             status, error = "error", str(exc)
             return _error(502, str(exc))
@@ -254,7 +279,7 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
         if model is None:
             return _error(503, "no model is loaded and no default model is set")
         try:
-            return await ctx.scheduler.run_llm(priority, model, 1, lambda url: relay(request, url))
+            return await ctx.scheduler.run_llm(rank_of(request), model, 1, lambda url: relay(request, url))
         except EngineError as exc:
             return _error(502, str(exc))
 

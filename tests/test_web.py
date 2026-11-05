@@ -45,7 +45,8 @@ async def rig(tmp_path, aiohttp_client):
 
 async def test_status_shape(rig):
     data = await (await rig.client.get("/api/status")).json()
-    assert set(data) == {"queue", "engine", "comfy_pending", "gpu", "recent"}
+    assert set(data) == {"queue", "engine", "comfy_pending", "gpu", "recent", "doors"}
+    assert data["doors"]["11434"] == {"today": 0, "last_seen": None, "busy": False}
     assert data["queue"] == {"running": None, "pending": []}
     assert data["engine"] is None and data["comfy_pending"] == 0
     assert data["gpu"] == {"used_mb": 100, "total_mb": 8192}
@@ -113,3 +114,35 @@ def test_gpu_processes_are_named_and_sorted_by_memory():
         {"pid": 2698210, "name": "ComfyUI", "mb": 158},
         {"pid": 9692, "name": "ptyxis", "mb": 84},
     ]
+
+
+@pytest.mark.parametrize("priority", [
+    [{"door": 9999}],  # no such door
+    [{"client": "not an address"}],
+    [{"client": "192.168.1.5", "drop": "yes"}],
+    [{"door": 11434, "client": "192.168.1.5"}],  # a line is one or the other
+    [{}],
+])
+async def test_priority_validation_rejects_bad_lines(rig, priority):
+    resp = await rig.client.put("/api/settings", json={"priority": priority})
+    assert resp.status == 400
+
+
+async def test_priority_and_door_settings_roundtrip(rig):
+    lines = [{"client": "192.168.1.0/24", "agent": "node", "drop": True, "label": "ST"}, {"door": 11434}]
+    routes = [{"port": 11434, "kind": "llm", "profile": "plain", "max_tokens": 777,
+               "allow": {"vision": False, "reasoning": True, "tools": True}}]
+    resp = await rig.client.put("/api/settings", json={"priority": lines, "routes": routes})
+    assert resp.status == 200, await resp.text()
+    assert rig.settings.rules() == lines and rig.settings.routes[0].max_tokens == 777
+    assert load_settings(rig.path).routes[0].allow["vision"] is False
+    bad = await rig.client.put("/api/settings", json={"routes": [{"port": 11434, "kind": "llm", "max_tokens": 0}]})
+    assert bad.status == 400
+
+
+async def test_clients_endpoint_lists_who_has_been_calling(rig):
+    rig.db.log_request("11434", "plain", "m", 1, 1, 1, 1.0, "ok", client="192.168.1.12", user_agent="node-fetch")
+    clients = await (await rig.client.get("/api/clients")).json()
+    assert [(c["client"], c["agent"], c["count"]) for c in clients] == [("192.168.1.12", "node-fetch", 1)]
+    status = await (await rig.client.get("/api/status")).json()
+    assert status["doors"]["11434"]["today"] == 1 and status["doors"]["11435"]["today"] == 0

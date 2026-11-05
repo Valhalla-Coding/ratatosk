@@ -30,3 +30,27 @@ def test_roundtrip_ignores_unknown_keys(tmp_path):
     data["routes"][0]["bogus"] = 2
     p.write_text(json.dumps(data))
     assert load_settings(p) == s
+
+
+def test_door_limit_falls_back_to_the_old_caps(tmp_path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps({"max_tokens_cap": 512, "max_tokens_cap_plain": 4096, "routes": [
+        {"port": 1, "kind": "llm", "profile": "rp"},
+        {"port": 2, "kind": "llm", "profile": "plain"},
+        {"port": 3, "kind": "llm", "profile": "plain", "max_tokens": 100}]}))
+    s = load_settings(p)
+    assert [s.max_tokens_for(r) for r in s.routes] == [512, 4096, 100]
+
+
+def test_door_features_default_to_allowed():
+    from ratatosk.settings import Route
+    assert Route(1, "llm").allow == {"vision": True, "reasoning": True, "tools": True}
+
+
+def test_default_priority_matches_the_old_order(tmp_path):
+    from ratatosk.settings import default_priority
+    s = load_settings(tmp_path / "missing.json")
+    assert s.priority is None
+    assert s.rules() == default_priority(s.routes) == [{"door": 11435}, {"door": 11434}, {"door": 8188}]
+    s.priority = []  # an empty list means "no lines", not "use the default"
+    assert s.rules() == []

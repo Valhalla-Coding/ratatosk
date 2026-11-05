@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import re
 from dataclasses import asdict, fields
 from pathlib import Path
@@ -15,6 +16,31 @@ INT_FIELDS = ("ui_port", "engine_port", "max_tokens_cap", "max_tokens_cap_plain"
 STR_FIELDS = ("comfy_url", "engine_dir", "default_model", "data_dir")
 PORT_FIELDS = ("ui_port", "engine_port")
 KINDS, PROFILES = ("llm", "comfy"), ("plain", "rp")
+FEATURES = ("vision", "reasoning", "tools")
+
+
+def _is_address(value) -> bool:
+    try:
+        ipaddress.ip_network(value, strict=False)
+        return isinstance(value, str)
+    except ValueError:
+        return False
+
+
+def _validate_priority(lines) -> None:
+    if not isinstance(lines, list):
+        raise ValueError("priority must be a list of lines")
+    for line in lines:
+        if not isinstance(line, dict) or ("door" in line) == ("client" in line):
+            raise ValueError("each priority line names either a door or a client")
+        if "door" in line and not _is_port(line["door"]):
+            raise ValueError("a door line needs a port number")
+        if "client" in line and not _is_address(line["client"]):
+            raise ValueError("a client line needs an IP address or range")
+        if "drop" in line and not isinstance(line["drop"], bool):
+            raise ValueError("drop must be true or false")
+        if not all(isinstance(line.get(k, ""), str) for k in ("agent", "label")):
+            raise ValueError("agent and label must be text")
 
 
 def parse_gpu(text: str) -> dict | None:
@@ -101,6 +127,14 @@ def validate_settings(data) -> None:
             raise ValueError(f"route kind must be one of {KINDS}")
         if route.get("profile", "plain") not in PROFILES:
             raise ValueError(f"route profile must be one of {PROFILES}")
+        limit = route.get("max_tokens")
+        if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int) or limit < 1):
+            raise ValueError("a door's longest reply must be a positive whole number")
+        allow = route.get("allow", {})
+        if not (isinstance(allow, dict) and set(allow) <= set(FEATURES) and all(isinstance(v, bool) for v in allow.values())):
+            raise ValueError(f"allow must map {FEATURES} to true or false")
+    if "priority" in data and data["priority"] is not None:
+        _validate_priority(data["priority"])
 
 
 def validate_ports(effective: dict) -> None:
@@ -112,6 +146,10 @@ def validate_ports(effective: dict) -> None:
     duplicates = sorted({p for p in ports if ports.count(p) > 1})
     if duplicates:
         raise ValueError(f"each port can be used once (routes, the UI and the engine); repeated: {duplicates}")
+    door_ports = {r["port"] for r in routes}
+    for line in effective.get("priority") or []:
+        if "door" in line and line["door"] not in door_ports:
+            raise ValueError(f"the priority list names door {line['door']}, which does not exist")
     low = sorted(p for p in ports if p < 1024)
     if low:
         raise ValueError(f"ports below 1024 need root and cannot be used: {low}")
@@ -131,7 +169,17 @@ def make_ui_app(ctx: AppContext, comfy: Comfy, settings_path: Path,
             "comfy_pending": pending,
             "gpu": await gpu_reader(),
             "recent": ctx.db.recent(20),
+            "doors": self_doors(),
         })
+
+    def self_doors():
+        activity, busy = ctx.db.door_activity(), ctx.scheduler.queue.running_door()
+        return {str(r.port): {"today": activity.get(str(r.port), {}).get("today", 0),
+                              "last_seen": activity.get(str(r.port), {}).get("last_seen"), "busy": busy == r.port}
+                for r in ctx.settings.routes}
+
+    async def clients(_):
+        return web.json_response(ctx.db.recent_clients())
 
     async def request_detail(request: web.Request):
         row = ctx.db.get(int(request.match_info["id"]))
@@ -160,6 +208,7 @@ def make_ui_app(ctx: AppContext, comfy: Comfy, settings_path: Path,
     app.router.add_get("/", index)
     app.router.add_get("/api/status", status)
     app.router.add_get(r"/api/requests/{id:\d+}", request_detail)
+    app.router.add_get("/api/clients", clients)
     app.router.add_get("/api/settings", get_settings)
     app.router.add_put("/api/settings", put_settings)
     return app

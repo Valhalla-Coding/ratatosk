@@ -52,3 +52,28 @@ def test_an_old_database_gets_the_new_columns(tmp_path):
     assert db.recent(1)[0]["has_content"] == 0 and db.recent(1)[0]["client"] is None  # the old row survives
     db.log_request("1", "plain", "m", 8192, 1, 1, 0.1, "ok", client="x", prompt_text="p")
     assert db.get(2)["client"] == "x"
+
+
+def test_recent_clients_groups_by_address_and_program_newest_first(tmp_path):
+    db = Db(tmp_path / "r.db")
+    db.log_request("11434", "plain", "m", 1, 1, 1, 1.0, "ok", client="192.168.1.12", user_agent="node-fetch")
+    db.log_request("11434", "plain", "m", 1, 1, 1, 1.0, "ok", client="192.168.1.12", user_agent="OpenAI/Python")
+    db.log_request("11434", "plain", "m", 1, 1, 1, 1.0, "ok", client="192.168.1.12", user_agent="node-fetch")
+    db.log_request("11434", "plain", "m", 1, 1, 1, 1.0, "ok")  # no client recorded: not listed
+    clients = db.recent_clients()
+    assert [(c["client"], c["agent"], c["count"]) for c in clients] == [
+        ("192.168.1.12", "node-fetch", 2), ("192.168.1.12", "OpenAI/Python", 1)]
+    assert clients[0]["last_seen"]
+    assert len(db.recent_clients(limit=1)) == 1
+
+
+def test_door_activity_counts_today_and_remembers_the_last_request(tmp_path):
+    db = Db(tmp_path / "r.db")
+    db.log_request("11434", "plain", "m", 1, 1, 1, 1.0, "ok")
+    db.log_request("11434", "plain", "m", 1, 1, 1, 1.0, "ok")
+    db.log_request("11435", "rp", "m", 1, 1, 1, 1.0, "ok")
+    db._con.execute("UPDATE requests SET ts = '2001-01-01 00:00:00' WHERE id = 3")
+    activity = db.door_activity()
+    assert activity["11434"]["today"] == 2 and activity["11434"]["last_seen"]
+    assert activity["11435"]["today"] == 0 and activity["11435"]["last_seen"] == "2001-01-01 00:00:00"
+    assert "8188" not in activity

@@ -47,3 +47,16 @@ def test_a_vision_file_can_be_set_for_a_model_that_has_none(tmp_path):
     models = scan([tmp_path], {"obliterated": str(projector), "gone": str(tmp_path / "missing.gguf")})
     assert models[0].mmproj == projector
     assert scan([tmp_path], {"obliterated": str(tmp_path / "missing.gguf")})[0].mmproj is None  # a missing file is ignored
+
+
+def test_scan_reads_capabilities_and_survives_files_that_are_not_gguf(tmp_path):
+    import struct
+    from tests.test_gguf import STRING, gguf
+    smart = tmp_path / "pub/repo/Smart.gguf"
+    smart.parent.mkdir(parents=True)
+    smart.write_bytes(gguf([("tokenizer.chat_template", STRING("{{ tools }} enable_thinking"))]))
+    make(tmp_path, "pub/repo/mmproj-Smart.gguf")
+    make(tmp_path, "pub/other/Broken.gguf")  # not a GGUF at all
+    by_id = {m.id: m for m in scan([tmp_path])}
+    assert by_id["smart"].capabilities == {"vision": True, "tools": True, "reasoning": True}
+    assert by_id["broken"].capabilities == {"vision": False, "tools": False, "reasoning": False}

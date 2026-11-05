@@ -4,7 +4,7 @@ import itertools
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
-P_RP, P_LLM, P_IMAGE, P_TUNE = 0, 1, 2, 3
+P_RP, P_LLM, P_IMAGE, P_TUNE = 0, 1, 2, 10**6  # tuning stays behind every rule line
 
 
 @dataclass
@@ -13,6 +13,18 @@ class Job:
     priority: int
     run: Callable[[], Awaitable[Any]]
     after: Callable[[], Awaitable[None]] | None = None  # holds the GPU after `run` has returned its result
+    preempt: bool = False  # cancel the running job if it ranks lower than this one
+    owner: str = ""  # who is asking; named in the error the cancelled job's caller gets
+    door: int | None = None  # the port it came in on, for the "busy" light in the UI
+    on_preempt: Callable[[], Awaitable[None]] | None = None  # cleanup if THIS job is cancelled by another (e.g. tell ComfyUI to stop)
+
+
+class Preempted(Exception):
+    """The job was cancelled to make room for a "drop everything" request."""
+
+    def __init__(self, by: str):
+        super().__init__(f"dropped by {by}")
+        self.by = by
 
 
 @dataclass(eq=False)
@@ -21,6 +33,7 @@ class _Entry:
     fut: asyncio.Future
     task: asyncio.Task | None = None
     dead: bool = False  # cancelled by its caller or preempted
+    preempted: bool = False
 
 
 class GpuQueue:
@@ -48,20 +61,29 @@ class GpuQueue:
         running = self._running
         if running and running.job.priority == P_TUNE and job.priority < P_TUNE:
             self._kill(running)
+        elif running and job.preempt and running.job.priority > job.priority:
+            self._kill(running, Preempted(job.owner))
         try:
             return await entry.fut
         except asyncio.CancelledError:
             self._kill(entry)
             raise
 
+    def running_door(self) -> int | None:
+        return self._running.job.door if self._running else None
+
     def snapshot(self) -> dict:
         pending = [e.job.name for _, _, e in sorted(self._heap) if not e.dead]
         return {"running": self._running.job.name if self._running else None, "pending": pending}
 
     @staticmethod
-    def _kill(entry: _Entry) -> None:
+    def _kill(entry: _Entry, reason: Preempted | None = None) -> None:
         entry.dead = True
-        entry.fut.cancel()
+        entry.preempted = reason is not None
+        if reason is not None and not entry.fut.done():
+            entry.fut.set_exception(reason)
+        else:
+            entry.fut.cancel()
         if entry.task:
             entry.task.cancel()
 
@@ -89,18 +111,19 @@ class GpuQueue:
         entry.task = asyncio.ensure_future(entry.job.run())
         try:
             result = await entry.task
+            if not entry.fut.done():
+                entry.fut.set_result(result)
+            if entry.job.after:
+                entry.task = asyncio.ensure_future(entry.job.after())  # still killable while it holds the GPU
+                await entry.task
         except asyncio.CancelledError:
             if not entry.dead:
                 raise  # the runner itself is being stopped
-            return
+            if entry.preempted and entry.job.on_preempt:
+                try:
+                    await entry.job.on_preempt()
+                except Exception:  # ponytail: a failed cleanup must not stop the queue; add logging when the service logs
+                    pass
         except Exception as exc:
             if not entry.fut.done():
-                entry.fut.set_exception(exc)
-            return
-        if not entry.fut.done():
-            entry.fut.set_result(result)
-        if entry.job.after:
-            try:
-                await entry.job.after()
-            except Exception:  # ponytail: a failing hold is dropped; add logging when the service logs
-                pass
+                entry.fut.set_exception(exc)  # a failing hold after the result is dropped: the future is already done

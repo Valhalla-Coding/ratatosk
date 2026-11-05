@@ -13,6 +13,13 @@ class Comfy:
         self._session = session
         self._settle_poll, self._settle_cap = settle_poll, settle_cap
 
+    async def interrupt(self) -> None:
+        """Stop the image being made and forget what is waiting behind it ("drop everything")."""
+        async with self._session.post(f"{self.base_url}/interrupt") as resp:
+            resp.raise_for_status()
+        async with self._session.post(f"{self.base_url}/queue", json={"clear": True}) as resp:
+            resp.raise_for_status()
+
     async def pending(self) -> int:
         """Jobs ComfyUI is running or has queued."""
         async with self._session.get(f"{self.base_url}/queue") as resp:

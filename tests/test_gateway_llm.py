@@ -432,3 +432,86 @@ async def test_unsupported_paths_are_refused_clearly_and_show_up_in_the_log(rig,
     assert (newest["status"], older["status"]) == ("unsupported", "unsupported")
     assert older["path"] == "/v1/images/generations" and older["error"]  # nothing is silent any more
     assert rig.engine.pid is None
+
+
+async def client_with_agent(aiohttp_client, rig, profile, agent):
+    server = make_llm_app(Route(11434, "llm", profile), rig.ctx)
+    return await aiohttp_client(server, server_kwargs={"handler_cancellation": True},
+                                headers={"User-Agent": agent})
+
+
+async def test_a_client_line_moves_its_request_ahead_of_others_in_the_queue(rig, aiohttp_client):
+    rig.settings.priority = [{"client": "127.0.0.1", "agent": "vip"}]
+    plain = await client_for(aiohttp_client, rig)
+    vip = await client_with_agent(aiohttp_client, rig, "plain", "vip")
+    blocker = asyncio.create_task(plain.post("/v1/completions", json={"model": "alpha", "prompt": "blocker", "stream": True, "slow": 0.4}))
+    await wait_for_request(rig, "blocker")
+    a = asyncio.create_task(plain.post("/v1/completions", json={"model": "alpha", "prompt": "ordinary"}))
+    await asyncio.sleep(0.1)
+    b = asyncio.create_task(vip.post("/v1/completions", json={"model": "alpha", "prompt": "important"}))
+    await asyncio.gather(blocker, a, b)
+    order = [e["body"]["prompt"] for e in rig.log() if e["event"] == "request"]
+    assert order.index("important") < order.index("ordinary")
+
+
+async def test_a_drop_line_cuts_off_the_running_reply_and_the_log_says_who(rig, aiohttp_client):
+    rig.settings.priority = [{"client": "127.0.0.1", "agent": "boss", "drop": True, "label": "boss"}]
+    plain = await client_for(aiohttp_client, rig)
+    boss = await client_with_agent(aiohttp_client, rig, "plain", "boss")
+    victim = await plain.post("/v1/completions", json={"model": "alpha", "prompt": "victim", "stream": True, "slow": 5})
+    await victim.content.readany()
+    urgent = await asyncio.wait_for(boss.post("/v1/completions", json={"model": "alpha", "prompt": "urgent"}), 5)
+    assert urgent.status == 200
+    with pytest.raises(aiohttp.ClientError):  # the half-sent reply is cut off, not finished
+        await asyncio.wait_for(victim.read(), 3)
+    for _ in range(50):
+        rows = [r for r in rig.db.recent(10) if r["status"] == "dropped"]
+        if rows:
+            break
+        await asyncio.sleep(0.1)
+    assert rows and rows[0]["error"] == "dropped by boss"
+
+
+async def test_without_a_priority_list_the_old_order_stands(rig, aiohttp_client):
+    assert rig.settings.priority is None  # test_rp_profile_runs_before_plain covers the behaviour itself
+    from ratatosk.priority import rank_request
+    assert rank_request(rig.settings, Route(11435, "llm", "rp"), "1.1.1.1", "").priority < rank_request(
+        rig.settings, Route(11434, "llm", "plain"), "1.1.1.1", "").priority < rank_request(
+        rig.settings, Route(8188, "comfy"), "1.1.1.1", "").priority
+
+
+async def client_allowing(aiohttp_client, rig, **allow):
+    route = Route(11434, "llm", "plain", allow={"vision": True, "reasoning": True, "tools": True, **allow})
+    return await aiohttp_client(make_llm_app(route, rig.ctx), server_kwargs={"handler_cancellation": True})
+
+
+async def test_vision_off_on_a_door_refuses_pictures(rig, aiohttp_client):
+    client = await client_allowing(aiohttp_client, rig, vision=False)
+    resp = await client.post("/v1/chat/completions", json=picture_request(1))
+    assert resp.status == 400 and "turned off" in (await resp.json())["error"]
+    assert rig.log() == []  # the engine was never started for it
+
+
+async def test_tools_off_on_a_door_removes_every_tool_field(rig, aiohttp_client):
+    client = await client_allowing(aiohttp_client, rig, tools=False)
+    body = {"model": "alpha", "messages": [{"role": "user", "content": "hi"}], "tools": [{"type": "function"}],
+            "tool_choice": "auto", "functions": [{}], "function_call": "auto"}
+    assert (await client.post("/v1/chat/completions", json=body)).status == 200
+    sent = sent_to_engine(rig, "/v1/chat/completions")[0]
+    assert not {"tools", "tool_choice", "functions", "function_call"} & set(sent)
+
+
+async def test_reasoning_off_on_a_door_overrides_what_the_client_asked_for(rig, aiohttp_client):
+    client = await client_allowing(aiohttp_client, rig, reasoning=False)
+    body = {"model": "alpha", "messages": [{"role": "user", "content": "hi"}],
+            "chat_template_kwargs": {"enable_thinking": True, "other": 1}}
+    assert (await client.post("/v1/chat/completions", json=body)).status == 200
+    assert sent_to_engine(rig, "/v1/chat/completions")[0]["chat_template_kwargs"] == {"enable_thinking": False, "other": 1}
+
+
+def test_reasoning_off_is_left_alone_for_a_model_that_cannot_switch_it():
+    from ratatosk.gateway_llm import apply_allow
+    body = {"messages": []}
+    assert apply_allow(body, {"reasoning": False}, can_reason=False) is None and "chat_template_kwargs" not in body
+    assert apply_allow(body, {"reasoning": False}, can_reason=True) is None
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}
