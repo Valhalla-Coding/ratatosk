@@ -46,7 +46,7 @@ class Scheduler:
                 except Exception:  # ponytail: ComfyUI down or busy; carry on, a failed engine start will say if memory is short
                     pass
             try:
-                await self.engine.ensure(Path(model.path), bucket)
+                await self.engine.ensure(Path(model.path), bucket, model.mmproj)
             except BaseException:
                 self.last_kind = None
                 raise

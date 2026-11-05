@@ -49,8 +49,9 @@
 </header>
 <main>
   <section id="now" class="on">
-    <div class="card"><h2>GPU memory</h2><div class="bar"><i id="gpu-bar" style="width:0"></i></div><div id="gpu-text" class="dim"></div></div>
-    <div class="card"><h2>Engine</h2><div id="engine"></div></div>
+    <div class="card"><h2>GPU memory</h2><div class="bar"><i id="gpu-bar" style="width:0"></i></div><div id="gpu-text" class="dim"></div>
+      <div id="gpu-who"></div></div>
+    <div class="card"><h2>Ratatosk's engine</h2><div id="engine"></div><div id="engine-note" class="st-error"></div></div>
     <div class="card"><h2>Queue</h2><div id="queue"></div><div id="comfy" class="dim"></div></div>
     <div class="card"><h2>Recent requests</h2>
       <div class="scroll"><table><thead><tr><th><span class="sr">Details</span></th><th>When</th><th>Route</th><th>Model</th><th>Context</th><th>In</th><th>Out</th><th>Seconds</th><th>tok/s</th><th>Status</th></tr></thead><tbody id="recent"></tbody></table></div>
@@ -61,13 +62,14 @@
       <div class="dim">Port changes apply after the service restarts.</div></div>
     <div class="card"><h2>General</h2><div id="fields"></div></div>
     <div class="card"><h2>Models and aliases</h2><label>Model folders (JSON list of {"path", "label"})</label><textarea id="model_folders"></textarea>
-      <label>Aliases (JSON, name the client asks for → model id)</label><textarea id="aliases"></textarea></div>
+      <label>Aliases (JSON, name the client asks for → model id)</label><textarea id="aliases"></textarea>
+      <label>Vision files (JSON, model id → path of its mmproj file; only for a model with none beside it)</label><textarea id="mmproj_files"></textarea></div>
     <button class="act" onclick="save()">Save</button><span id="msg"></span>
   </section>
 </main>
 <script>
 const $ = id => document.getElementById(id);
-const NUM = ["ui_port","engine_port","max_tokens_cap","idle_minutes","reserve_gb","image_wait_seconds","threads","keep_content"];
+const NUM = ["ui_port","engine_port","max_tokens_cap","idle_minutes","reserve_gb","image_wait_seconds","threads","keep_content","image_max_tokens"];
 const TXT = ["comfy_url","engine_dir","default_model","data_dir"];
 let routes = [];
 
@@ -80,6 +82,19 @@ const fmt = (v, digits = 1) => v === null || v === undefined ? "-" : Number(v).t
 const localTime = ts => new Date(ts.replace(" ", "T") + "Z").toLocaleString("sv-SE");  // the log stores UTC
 let recent = [], recentKey = "", keepContent = 50;
 const open = new Set(), details = {};
+
+function drawGpuWho(d) {
+  const who = $("gpu-who"), note = $("engine-note");
+  who.replaceChildren(); note.textContent = "";
+  if (!d.gpu) return;
+  const big = (d.gpu.processes || []).filter(p => p.mb >= 100);
+  const listed = big.reduce((sum, p) => sum + p.mb, 0), other = d.gpu.used_mb - listed;
+  const parts = big.map(p => p.name + " " + p.mb.toLocaleString("sv-SE") + " MB");
+  if (other >= 200) parts.push("other " + other.toLocaleString("sv-SE") + " MB");
+  who.textContent = parts.length ? "In use by: " + parts.join(" · ") : "Nothing is using the GPU.";
+  const foreign = big.filter(p => p.name === "LM Studio engine").reduce((sum, p) => sum + p.mb, 0);
+  if (!d.engine && foreign >= 1000) note.textContent = "LM Studio's engine is holding " + foreign.toLocaleString("sv-SE") + " MB, so a model started here would not fit.";
+}
 
 function cell(tr, text, cls) { const c = document.createElement("td"); c.textContent = text; if (cls) c.className = cls; tr.appendChild(c); return c; }
 
@@ -158,7 +173,8 @@ async function refresh() {
     const d = await (await fetch("/api/status")).json();
     if (d.gpu) { $("gpu-bar").style.width = (100 * d.gpu.used_mb / d.gpu.total_mb) + "%"; $("gpu-text").textContent = d.gpu.used_mb + " / " + d.gpu.total_mb + " MB"; }
     else { $("gpu-bar").style.width = "0"; $("gpu-text").textContent = "no GPU reading"; }
-    $("engine").textContent = d.engine ? d.engine.model + " at " + d.engine.ctx + " tokens of context" : "No model loaded";
+    $("engine").textContent = d.engine ? d.engine.model + " at " + d.engine.ctx + " tokens of context" : "No model loaded here";
+    drawGpuWho(d);
     $("queue").textContent = (d.queue.running ? "Running: " + d.queue.running : "Idle") + (d.queue.pending.length ? "   Waiting: " + d.queue.pending.join(", ") : "");
     $("comfy").textContent = d.comfy_pending === null ? "ComfyUI: not reachable" : "ComfyUI jobs: " + d.comfy_pending;
     setRecent(d.recent);
@@ -190,12 +206,13 @@ async function loadSettings() {
   }
   $("model_folders").value = JSON.stringify(s.model_folders, null, 2);
   $("aliases").value = JSON.stringify(s.aliases, null, 2);
+  $("mmproj_files").value = JSON.stringify(s.mmproj_files, null, 2);
 }
 
 async function save() {
   const msg = $("msg"); msg.className = ""; msg.textContent = "";
   try {
-    const body = { routes, model_folders: JSON.parse($("model_folders").value), aliases: JSON.parse($("aliases").value) };
+    const body = { routes, model_folders: JSON.parse($("model_folders").value), aliases: JSON.parse($("aliases").value), mmproj_files: JSON.parse($("mmproj_files").value) };
     for (const k of NUM) body[k] = +$("f-" + k).value;
     for (const k of TXT) body[k] = $("f-" + k).value;
     const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

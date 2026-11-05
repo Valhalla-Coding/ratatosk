@@ -26,7 +26,7 @@ class FakeEngine:
     def pid(self):
         return 1 if self.running else None
 
-    async def ensure(self, model, ctx):
+    async def ensure(self, model, ctx, mmproj=None):
         self.loaded, self.running = (model, ctx), True
 
     async def stop(self):

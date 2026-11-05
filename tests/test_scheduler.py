@@ -22,8 +22,9 @@ class FakeEngine:
     def pid(self):
         return 1 if self.running else None
 
-    async def ensure(self, model, ctx):
+    async def ensure(self, model, ctx, mmproj=None):
         self.calls.append(("ensure", ctx))
+        self.last_mmproj = mmproj
         if self.fail:
             raise EngineError("no memory")
         self.loaded, self.running = (model, ctx), True
@@ -108,6 +109,16 @@ async def test_llm_after_llm_does_neither(rig):
     calls.clear()
     await s.run_llm(P_LLM, MODEL, 5000, ok)
     assert ("free",) not in calls and ("stop",) not in calls
+
+
+async def test_the_models_vision_file_reaches_the_engine(rig):
+    make, calls, engine, *_ = rig
+    s = make()
+    vision = Model("v", Path("/m/v.gguf"), 1, Path("/m"), Path("/m/mmproj.gguf"))
+    await s.run_llm(P_LLM, vision, 5000, ok)
+    assert engine.last_mmproj == Path("/m/mmproj.gguf")
+    await s.run_llm(P_LLM, MODEL, 5000, ok)
+    assert engine.last_mmproj is None  # a text-only model is started without one
 
 
 async def test_bucket_used(rig):

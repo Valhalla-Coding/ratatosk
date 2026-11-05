@@ -42,6 +42,14 @@ def _prompt_text(body: dict) -> str:
     return prompt if isinstance(prompt, str) else "\n".join(map(str, prompt))
 
 
+def _count_pictures(body: dict) -> int:
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return 0
+    return sum(1 for m in messages if isinstance(m, dict) and isinstance(m.get("content"), list)
+               for part in m["content"] if isinstance(part, dict) and part.get("type") in ("image_url", "input_image"))
+
+
 def _asked_tokens(body: dict) -> int | None:
     """The reply length the client asked for, if it is a sensible number."""
     def positive(value):
@@ -120,6 +128,10 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
         if not model.path.exists():
             return _error(503, f"the file for model {model.id!r} is missing; its drive is probably not mounted")
 
+        pictures = _count_pictures(body)
+        if pictures and model.mmproj is None:
+            return _error(400, f"model {model.id!r} cannot read pictures: it has no vision file "
+                               "(put one beside it, or set it under mmproj_files in Settings)")
         asked = _asked_tokens(body)
         capped = _capped_tokens(body, ctx.settings.max_tokens_cap)
         body["max_tokens"] = capped
@@ -130,6 +142,7 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
         prompt_tokens = await ctx.engine.count_tokens(text)
         if prompt_tokens is None:
             prompt_tokens = len(text) // 3
+        prompt_tokens += pictures * ctx.settings.image_max_tokens  # the engine cannot count these ahead; assume the most
         needed = needed_ctx(prompt_tokens, capped)
         if needed > ctx.scheduler.limit_bucket():
             return _error(413, f"the request needs about {needed} tokens of context; the limit is {ctx.scheduler.limit_bucket()}")

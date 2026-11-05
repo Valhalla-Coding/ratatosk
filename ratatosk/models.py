@@ -8,10 +8,21 @@ class Model:
     path: Path
     size: int
     folder: Path
+    mmproj: Path | None = None  # the vision file that lets the model read pictures
 
 
-def scan(folders: list[Path]) -> list[Model]:
-    """Every .gguf under the folders (vision projector files excluded). A missing folder gives nothing."""
+def _vision_file(model_path: Path, override: str | None) -> Path | None:
+    """The vision file set for this model, else the one lying next to it (as model downloaders put it)."""
+    if override:
+        return Path(override) if Path(override).is_file() else None
+    siblings = sorted(model_path.parent.glob("mmproj*.gguf"))
+    return siblings[0] if siblings else None
+
+
+def scan(folders: list[Path], mmproj_files: dict | None = None) -> list[Model]:
+    """Every .gguf under the folders (vision files are not models). A missing folder gives nothing.
+
+    `mmproj_files` maps a model id to a vision file, for a model that has none beside it."""
     found = []
     for folder in map(Path, folders):
         if not folder.is_dir():
@@ -19,7 +30,7 @@ def scan(folders: list[Path]) -> list[Model]:
         for p in sorted(folder.rglob("*.gguf")):
             if "mmproj" in p.name.lower():
                 continue
-            found.append(Model(p.stem.lower(), p, p.stat().st_size, folder))
+            found.append(Model(p.stem.lower(), p, p.stat().st_size, folder, _vision_file(p, (mmproj_files or {}).get(p.stem.lower()))))
     return found
 
 

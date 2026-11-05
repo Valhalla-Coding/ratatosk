@@ -227,6 +227,7 @@ async def test_streamed_reply_is_recorded_as_text(rig, aiohttp_client):
 
 
 async def test_images_pass_through_but_are_stored_as_a_placeholder(rig, aiohttp_client):
+    rig.models = [Model("alpha", rig.models[0].path, 1, rig.models[0].folder, rig.models[0].path)]  # a model that can read pictures
     client = await client_for(aiohttp_client, rig)
     frame = "data:image/jpeg;base64," + "A" * 5000  # a camera frame
     await (await client.post("/v1/chat/completions", json={"model": "alpha", "messages": [{"role": "user", "content": [
@@ -236,6 +237,31 @@ async def test_images_pass_through_but_are_stored_as_a_placeholder(rig, aiohttp_
     assert "AAAA" not in d["prompt_text"]  # the frame itself is never kept
     sent = [e for e in rig.log() if e["event"] == "request"][0]["body"]
     assert sent["messages"][0]["content"][1]["image_url"]["url"] == frame  # and the engine still gets it whole
+
+
+def picture_request(count):
+    frame = "data:image/jpeg;base64," + "A" * 200
+    parts = [{"type": "text", "text": "what is this"}] + [{"type": "image_url", "image_url": {"url": frame}}] * count
+    return {"model": "alpha", "messages": [{"role": "user", "content": parts}]}
+
+
+async def test_pictures_count_toward_the_context_the_request_needs(rig, aiohttp_client):
+    rig.models = [Model("alpha", rig.models[0].path, 1, rig.models[0].folder, rig.models[0].path)]  # a model that can read pictures
+    rig.settings.image_max_tokens = 3000
+    client = await client_for(aiohttp_client, rig)
+    await (await client.post("/v1/chat/completions", json=picture_request(0))).read()
+    await (await client.post("/v1/chat/completions", json=picture_request(3))).read()
+    contexts = [row["ctx"] for row in rig.db.recent(2)][::-1]
+    assert contexts == [8192, 16384]  # three pictures at up to 3000 tokens each do not fit in 8192
+
+
+async def test_pictures_for_a_model_without_a_vision_file_are_refused_clearly(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)  # the rig's model has no vision file
+    resp = await client.post("/v1/chat/completions", json=picture_request(1))
+    assert resp.status == 400 and "cannot read pictures" in (await resp.json())["error"]
+    assert rig.engine.pid is None and rig.log() == []  # nothing was started for it
+    text_only = await client.post("/v1/chat/completions", json=picture_request(0))
+    assert text_only.status == 200
 
 
 def test_parse_reply_reads_text_tokens_and_speed_from_a_stream():

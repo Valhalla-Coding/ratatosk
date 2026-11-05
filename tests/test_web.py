@@ -98,3 +98,18 @@ async def test_index_has_both_tabs(rig):
 def test_parse_gpu():
     assert parse_gpu("7753, 8192\n") == {"used_mb": 7753, "total_mb": 8192}
     assert parse_gpu("garbage") is None
+
+
+def test_gpu_processes_are_named_and_sorted_by_memory():
+    from ratatosk.web import parse_gpu_processes
+    text = ("2698210, /home/master/Applications/Data/Packages/ComfyUI/venv/bin/python3, 158\n"
+            "306211, /home/master/.lmstudio/extensions/backends/llama.cpp-x/llama-server, 7152\n"
+            "55, /home/master/ratatosk/engine/backend/llama-server, 6060\n"
+            "9692, /usr/bin/ptyxis, 84\n"
+            "not a row\n")
+    assert parse_gpu_processes(text) == [
+        {"pid": 306211, "name": "LM Studio engine", "mb": 7152},
+        {"pid": 55, "name": "Ratatosk engine", "mb": 6060},
+        {"pid": 2698210, "name": "ComfyUI", "mb": 158},
+        {"pid": 9692, "name": "ptyxis", "mb": 84},
+    ]

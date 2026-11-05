@@ -45,7 +45,7 @@ async def start(settings_path: Path) -> Service:
     comfy = Comfy(settings.comfy_url, session)
     scheduler = Scheduler(settings, queue, engine, comfy)
     ctx = AppContext(settings, scheduler, engine, Db(Path(settings.data_dir) / "ratatosk.db", settings.keep_content),
-                     lambda: scan([Path(f["path"]) for f in settings.model_folders]))
+                     lambda: scan([Path(f["path"]) for f in settings.model_folders], settings.mmproj_files))
     queue.start()
     service = Service(engine, queue, session, asyncio.get_running_loop().create_task(scheduler.idle_loop()))
     apps = [(r.port, make_llm_app(r, ctx) if r.kind == "llm" else make_comfy_app(r, ctx)) for r in settings.routes]

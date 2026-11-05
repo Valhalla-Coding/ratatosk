@@ -11,7 +11,7 @@ from ratatosk.gateway_llm import AppContext
 from ratatosk.settings import Settings, save_settings, settings_from_dict
 
 INT_FIELDS = ("ui_port", "engine_port", "max_tokens_cap", "idle_minutes", "reserve_gb", "image_wait_seconds", "threads",
-              "keep_content")
+              "keep_content", "image_max_tokens")
 STR_FIELDS = ("comfy_url", "engine_dir", "default_model", "data_dir")
 PORT_FIELDS = ("ui_port", "engine_port")
 KINDS, PROFILES = ("llm", "comfy"), ("plain", "rp")
@@ -23,15 +23,47 @@ def parse_gpu(text: str) -> dict | None:
     return {"used_mb": int(match[1]), "total_mb": int(match[2])} if match else None
 
 
-async def read_gpu() -> dict | None:
+def label_process(name: str) -> str:
+    low = name.lower()
+    if "/ratatosk/engine" in low:
+        return "Ratatosk engine"
+    if ".lmstudio" in low or "lm-studio" in low:
+        return "LM Studio engine"
+    if "comfyui" in low:
+        return "ComfyUI"
+    return name.rsplit("/", 1)[-1]
+
+
+def parse_gpu_processes(text: str) -> list[dict]:
+    """`nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits`, biggest first."""
+    rows = []
+    for line in text.strip().splitlines():
+        try:
+            pid, rest = line.split(",", 1)
+            name, mb = rest.rsplit(",", 1)
+            rows.append({"pid": int(pid), "name": label_process(name.strip()), "mb": int(mb)})
+        except ValueError:
+            continue
+    return sorted(rows, key=lambda r: -r["mb"])
+
+
+async def _nvidia_smi(*args: str) -> str | None:
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        proc = await asyncio.create_subprocess_exec("nvidia-smi", *args, "--format=csv,noheader,nounits",
+                                                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
         out, _ = await asyncio.wait_for(proc.communicate(), 5)
     except (OSError, asyncio.TimeoutError):
         return None
-    return parse_gpu(out.decode(errors="replace"))
+    return out.decode(errors="replace")
+
+
+async def read_gpu() -> dict | None:
+    """Memory used and total, plus which programs hold it (so a full GPU is never unexplained)."""
+    memory = await _nvidia_smi("--query-gpu=memory.used,memory.total")
+    gpu = parse_gpu(memory) if memory else None
+    if gpu:
+        gpu["processes"] = parse_gpu_processes(await _nvidia_smi("--query-compute-apps=pid,process_name,used_memory") or "")
+    return gpu
 
 
 def _is_port(value) -> bool:
@@ -50,9 +82,10 @@ def validate_settings(data) -> None:
     for key in STR_FIELDS:
         if key in data and not isinstance(data[key], str):
             raise ValueError(f"{key} must be text")
-    if "aliases" in data and not (isinstance(data["aliases"], dict)
-                                  and all(isinstance(k, str) and isinstance(v, str) for k, v in data["aliases"].items())):
-        raise ValueError("aliases must map names to model ids or paths")
+    for key, meaning in (("aliases", "names to model ids or paths"), ("mmproj_files", "model ids to vision file paths")):
+        if key in data and not (isinstance(data[key], dict)
+                                and all(isinstance(k, str) and isinstance(v, str) for k, v in data[key].items())):
+            raise ValueError(f"{key} must map {meaning}")
     if "model_folders" in data and not (isinstance(data["model_folders"], list) and all(
             isinstance(f, dict) and isinstance(f.get("path"), str) for f in data["model_folders"])):
         raise ValueError("model_folders must be a list of objects with a path")
