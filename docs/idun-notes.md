@@ -37,3 +37,7 @@ Ratatosk now owns the public ports on Idun. Done with the user present.
 ## What the engine speaks (probed 2026-11-05) versus what Ratatosk passes on
 
 The engine (llama-server) answers: OpenAI chat and completions, OpenAI Responses (`/v1/responses`), Anthropic Messages (`/v1/messages`), and its own `/completion`, `/infill`, `/tokenize`, `/detokenize`, `/apply-template`, `/props`, `/slots`, `/health`, `/lora-adapters`. `/metrics`, embeddings and reranking need flags (501 without them). Ratatosk passes only `/v1/models`, `/v1/chat/completions` and `/v1/completions`; everything else is a 404.
+
+## API coverage (2026-11-05, after SillyTavern's llama.cpp type got only 404s)
+
+Which API a request speaks is decided by its path; no per-port API type is needed. Served through Ratatosk, queued like any generation: `/v1/chat/completions`, `/v1/completions`, `/v1/messages` (Anthropic), `/v1/responses` (OpenAI Responses), `/completion` and `/infill` (llama.cpp). Passed to the engine: `/tokenize`, `/detokenize`, `/apply-template`, `/slots`, `/lora-adapters`. Answered without loading a model: `/props`, `/health`, `/v1/models`. Not served: `/metrics` (needs an engine flag), embeddings and reranking (501: need a separate small engine; the nomic model is in `/home/master/models/nomic-ai/`). Any other path is refused with a clear 404 and appears on the Now tab with status `unsupported`.
