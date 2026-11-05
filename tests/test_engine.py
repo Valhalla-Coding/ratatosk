@@ -54,8 +54,12 @@ def test_argv_with_a_vision_file():
     settings = Settings(engine_dir="/e", engine_port=8081, threads=3, image_max_tokens=1024)
     model, projector = Path("/m/a.gguf"), Path("/m/mmproj.gguf")
     plain = Engine(settings).argv(model, 16384)
-    assert Engine(settings).argv(model, 16384, projector) == plain + ["--mmproj", str(projector), "--image-max-tokens", "1024"]
+    # the projector stays on the CPU by default: measured on Idun, on the GPU it halves the text speed (12.9 vs 25.1 tok/s)
+    assert Engine(settings).argv(model, 16384, projector) == plain + [
+        "--mmproj", str(projector), "--image-max-tokens", "1024", "--no-mmproj-offload"]
     assert "--mmproj" not in plain  # text-only models are started exactly as before
+    on_gpu = Settings(engine_dir="/e", engine_port=8081, threads=3, image_max_tokens=1024, mmproj_on_gpu=True)
+    assert "--no-mmproj-offload" not in Engine(on_gpu).argv(model, 16384, projector)
 
 
 async def test_ensure_restarts_when_the_vision_file_changes(make_engine):

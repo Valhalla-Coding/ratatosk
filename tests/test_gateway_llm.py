@@ -139,6 +139,22 @@ async def test_bad_or_huge_max_tokens_fall_back_to_the_cap(rig, aiohttp_client, 
     assert [e for e in rig.log() if e["event"] == "request"][0]["body"]["max_tokens"] == 1024
 
 
+async def test_request_defaults_fill_in_only_what_the_client_left_out(rig, aiohttp_client):
+    rig.settings.request_defaults = {"alpha": {"temperature": 0.3, "chat_template_kwargs": {"enable_thinking": False}},
+                                     "qwen3.5-9b-obliterated": {"top_p": 0.5}}
+    client = await client_for(aiohttp_client, rig)
+    await (await client.post("/v1/completions", json={"model": "alpha", "prompt": "a"})).read()
+    await (await client.post("/v1/completions", json={"model": "alpha", "prompt": "b", "temperature": 0.9,
+                                                      "chat_template_kwargs": {"x": 1}})).read()
+    await (await client.post("/v1/completions", json={"model": "qwen3.5-9b-obliterated", "prompt": "c"})).read()
+    sent = {e["body"]["prompt"]: e["body"] for e in rig.log() if e["event"] == "request"}
+    assert sent["a"]["temperature"] == 0.3 and sent["a"]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert sent["b"]["temperature"] == 0.9  # what the client sets wins
+    assert sent["b"]["chat_template_kwargs"] == {"enable_thinking": False, "x": 1}  # and settings inside it are merged
+    assert sent["c"]["top_p"] == 0.5 and sent["c"]["temperature"] == 0.3  # a default for the name the client used, plus the model's own
+    assert "top_p" not in sent["a"]  # a default for another name is not applied
+
+
 def test_the_plain_route_allows_longer_replies_than_the_roleplay_route_by_default():
     # a thinking model spends over a thousand tokens before it answers, so the plain cap must leave room for that
     assert Settings().max_tokens_cap_plain >= 4 * Settings().max_tokens_cap

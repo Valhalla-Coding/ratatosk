@@ -79,6 +79,11 @@ def validate_settings(data) -> None:
     for key in PORT_FIELDS:
         if key in data and not _is_port(data[key]):
             raise ValueError(f"{key} must be a port number from 1 to 65535")
+    if "mmproj_on_gpu" in data and not isinstance(data["mmproj_on_gpu"], bool):
+        raise ValueError("mmproj_on_gpu must be true or false")
+    if "request_defaults" in data and not (isinstance(data["request_defaults"], dict) and all(
+            isinstance(k, str) and isinstance(v, dict) for k, v in data["request_defaults"].items())):
+        raise ValueError("request_defaults must map a model name to an object of request fields")
     for key in STR_FIELDS:
         if key in data and not isinstance(data[key], str):
             raise ValueError(f"{key} must be text")

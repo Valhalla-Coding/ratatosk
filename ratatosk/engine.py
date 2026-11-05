@@ -39,8 +39,10 @@ class Engine:
         argv = [f"{s.engine_dir}/backend/llama-server", "--model", str(model), "--ctx-size", str(ctx),
                 "--host", "127.0.0.1", "--port", str(s.engine_port), "--fit", "on", "--flash-attn", "on",
                 "--parallel", "1", "--threads", str(s.threads)]
-        if mmproj:  # measured on Idun: about 0.25 GB of GPU memory, a picture read in about 3 s
+        if mmproj:  # measured on Idun: on the GPU the projector halves the text speed (12.9 vs 25.1 tok/s); on the CPU it does not
             argv += ["--mmproj", str(mmproj), "--image-max-tokens", str(s.image_max_tokens)]
+            if not s.mmproj_on_gpu:
+                argv.append("--no-mmproj-offload")
         return argv
 
     def _env(self) -> dict:

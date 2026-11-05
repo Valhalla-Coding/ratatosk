@@ -63,7 +63,8 @@
     <div class="card"><h2>General</h2><div id="fields"></div></div>
     <div class="card"><h2>Models and aliases</h2><label>Model folders (JSON list of {"path", "label"})</label><textarea id="model_folders"></textarea>
       <label>Aliases (JSON, name the client asks for → model id)</label><textarea id="aliases"></textarea>
-      <label>Vision files (JSON, model id → path of its mmproj file; only for a model with none beside it)</label><textarea id="mmproj_files"></textarea></div>
+      <label>Vision files (JSON, model id → path of its mmproj file; only for a model with none beside it)</label><textarea id="mmproj_files"></textarea>
+      <label>Request defaults (JSON, model name → fields added when the client leaves them out, e.g. {"chat_template_kwargs": {"enable_thinking": false}})</label><textarea id="request_defaults"></textarea></div>
     <button class="act" onclick="save()">Save</button><span id="msg"></span>
   </section>
 </main>
@@ -207,12 +208,13 @@ async function loadSettings() {
   $("model_folders").value = JSON.stringify(s.model_folders, null, 2);
   $("aliases").value = JSON.stringify(s.aliases, null, 2);
   $("mmproj_files").value = JSON.stringify(s.mmproj_files, null, 2);
+  $("request_defaults").value = JSON.stringify(s.request_defaults, null, 2);
 }
 
 async function save() {
   const msg = $("msg"); msg.className = ""; msg.textContent = "";
   try {
-    const body = { routes, model_folders: JSON.parse($("model_folders").value), aliases: JSON.parse($("aliases").value), mmproj_files: JSON.parse($("mmproj_files").value) };
+    const body = { routes, model_folders: JSON.parse($("model_folders").value), aliases: JSON.parse($("aliases").value), mmproj_files: JSON.parse($("mmproj_files").value), request_defaults: JSON.parse($("request_defaults").value) };
     for (const k of NUM) body[k] = +$("f-" + k).value;
     for (const k of TXT) body[k] = $("f-" + k).value;
     const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

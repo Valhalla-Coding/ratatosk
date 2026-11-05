@@ -128,6 +128,12 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
         if not model.path.exists():
             return _error(503, f"the file for model {model.id!r} is missing; its drive is probably not mounted")
 
+        defaults = {**ctx.settings.request_defaults.get(model.id, {}), **ctx.settings.request_defaults.get(name, {})}
+        for key, value in defaults.items():  # what the client set wins; settings inside a dict (chat_template_kwargs) are merged
+            if isinstance(value, dict) and isinstance(body.get(key), dict):
+                body[key] = {**value, **body[key]}
+            elif key not in body:
+                body[key] = value
         pictures = _count_pictures(body)
         if pictures and model.mmproj is None:
             return _error(400, f"model {model.id!r} cannot read pictures: it has no vision file "
