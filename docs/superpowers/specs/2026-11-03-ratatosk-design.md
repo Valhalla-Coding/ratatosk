@@ -31,7 +31,7 @@ Four sub-projects, each with its own plan and tests. This spec covers the whole 
 
 1. **Core:** gateway, queue, engine manager, ComfyUI coordination, model adoption, Now and Settings tabs.
 2. **Models:** Hugging Face search and download, storage tab, tuning per context size.
-3. **Roleplay checks:** a dedicated port that validates, repairs and retries replies.
+3. **Roleplay checks and skills:** a dedicated port that validates, repairs and retries replies, and adds selected skills to the prompt.
 4. **Composition and shaving:** sentence labelling, percentage log, shortening, later sliders.
 
 Not in scope: running more than one model at once, multi-GPU, user accounts, any cloud service, training models, replacing ComfyUI's own interface.
@@ -120,7 +120,18 @@ Requests on the `rp` route are buffered: the reply is generated in full, checked
 
 **Labels.** Dialogue, action, physical description, setting and atmosphere, feelings and inner thoughts, reflection and philosophy, exposition and lore, plot beat. Rules handle dialogue (text in quotes) and most action. For the rest, each sentence is embedded with a small CPU embedding model served by a second `llama-server` (`--embeddings`, no GPU; Idun already has `nomic-embed-text`, so no PyTorch is needed) and classified by nearest labelled examples (numpy). Low confidence gives `uncertain`. The user can relabel any sentence in the log; relabelled sentences become new examples. A starter set of about 100 sentences is drafted by a model and corrected by the user.
 
-**Steering through sliders** (a prompt instruction built from the slider values) is deferred to a later version because the clients send one text prompt that Ratatosk should not rewrite.
+**Steering through sliders** is built on skills (next section): a slider fills in a skill template, for example "about {n} words, mostly dialogue and action".
+
+### Skills (prompt injection)
+
+A skill is a block of instruction text that Ratatosk adds to the prompt before relaying it. The roleplay model obeys what sits at the very end of the prompt and half-ignores the rest, so position is part of a skill.
+
+- **Format.** A folder `skills/<name>/SKILL.md` (the layout Claude skills use): a header with `name`, `description`, optional `position` (`start` or `end`, default `end`) and optional `trigger` (keywords; empty means always on when selected), then the text. Only the text file is ever read; scripts and other files are ignored, and nothing is executed.
+- **Selection.** Each route has a list of enabled skill names, edited as checkboxes in Settings. Default: none.
+- **Injection.** For a text prompt in ChatML form, `end` skills become one extra `<|im_start|>system` block placed immediately before the final `<|im_start|>assistant`, and `start` skills a block at the very beginning. For a chat-style request (`messages`), the same blocks are added as system messages first and last. If the prompt has no recognisable markers, nothing is injected and the log page says so. `start` is for stable text only, because a change at the beginning discards the saved prompt work after it.
+- **Never stored.** Injected text is not part of the client's chat history, so it cannot pile up or be copied by the model into later replies. The log page shows the injected text and the final prompt for every reply.
+- **Budget.** Each skill shows its size in tokens; the total is checked against a setting (default 600 tokens) and over-budget selections show a warning. Each rule should have one owner: the game's card keeps its game logic, skills carry style and format.
+- **Add from GitHub.** The user pastes a repository address; Ratatosk lists every `SKILL.md` found (through GitHub's public API, only when the user asks), shows previews and sizes, and copies the chosen ones in. Imported skills start disabled, record their source and commit, can be updated or removed, and are flagged when large. This is the only network access the feature has, and it is user-initiated.
 
 ## 10. Interface
 
@@ -129,7 +140,7 @@ Four tabs, served on port 5960.
 - **Now:** live job, queue (text and images together), GPU memory, tokens per second, last few requests.
 - **Models:** installed models by folder with size and speed class, free space, Hugging Face search with fit-to-GPU hints, download, tune per context size, move.
 - **Roleplay:** one card per reply. A coloured stacked bar shows the composition in percent. Hovering a segment highlights those sentences; a setting switches highlighting and colouring. Shows checks passed or failed, retries, tokens before and after shaving, and the original with dropped sentences marked. Click a sentence to relabel it.
-- **Settings:** routes (listening port to backend), paths, reserve, caps, thresholds, banned phrases, shave mode.
+- **Settings:** routes (listening port to backend), paths, reserve, caps, thresholds, banned phrases, shave mode. Under each roleplay route, a skill list: a checkbox, name, description, position and token size per row, a preview and editor, and an "Add from GitHub" button.
 
 ## 11. Data
 
@@ -155,7 +166,8 @@ SQLite file `data/ratatosk.db`: `requests` (time, route, profile, model, context
 - Buffering delays the first word of roleplay replies. Acceptable, as replies already take minutes, but worth watching.
 - The takeover makes Ratatosk a single point of failure for text and images. Mitigated by auto-restart and a documented rollback.
 - ComfyUI's browser interface uses a websocket that the gateway must pass through unchanged. Verify early.
-- Open: a separate Images tab (not now, easy to add); prompt-side steering sliders (later); an API key on the routes (off by default, LAN only).
+- Skills written for coding agents are long and assume tools, so most will not suit a 9B roleplay model; the size warning and the disabled-on-import default exist for that reason. Skills from GitHub are third-party text in the prompt: the model has no tools, so the risk is output quality, but they are previewed before use.
+- Open: a separate Images tab (not now, easy to add); an API key on the routes (off by default, LAN only).
 
 ## Appendix: evidence for shaving
 
