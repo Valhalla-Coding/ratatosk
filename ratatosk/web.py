@@ -202,6 +202,10 @@ def make_ui_app(ctx: AppContext, comfy: Comfy, settings_path: Path,
         save_settings(ctx.settings, settings_path)
         return web.json_response(asdict(ctx.settings))
 
+    async def clear_text(_):
+        ctx.db.clear_text()
+        return web.json_response({})
+
     async def index(_):
         return web.FileResponse(Path(__file__).parent / "static" / "index.html")
 
@@ -210,6 +214,8 @@ def make_ui_app(ctx: AppContext, comfy: Comfy, settings_path: Path,
     app.router.add_get("/api/status", status)
     app.router.add_get(r"/api/requests/{id:\d+}", request_detail)
     app.router.add_get("/api/clients", clients)
+    app.router.add_post("/api/history/clear-text", clear_text)
+    app.router.add_static("/static/", Path(__file__).parent / "static")
     app.router.add_get("/api/settings", get_settings)
     app.router.add_put("/api/settings", put_settings)
     modelstore.add_routes(app, ctx, settings_path)

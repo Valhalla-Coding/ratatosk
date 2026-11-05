@@ -146,3 +146,12 @@ async def test_clients_endpoint_lists_who_has_been_calling(rig):
     assert [(c["client"], c["agent"], c["count"]) for c in clients] == [("192.168.1.12", "node-fetch", 1)]
     status = await (await rig.client.get("/api/status")).json()
     assert status["doors"]["11434"]["today"] == 1 and status["doors"]["11435"]["today"] == 0
+
+
+async def test_the_settings_script_is_served_and_stored_text_can_be_cleared(rig):
+    resp = await rig.client.get("/static/settings.js")
+    assert resp.status == 200 and "initSettings" in await resp.text()
+    rig.db.log_request("11434", "plain", "m", 1, 1, 1, 1.0, "ok", prompt_text="P", reply_text="R")
+    assert (await rig.client.post("/api/history/clear-text")).status == 200
+    detail = await (await rig.client.get("/api/requests/1")).json()
+    assert detail["prompt_text"] is None and detail["reply_text"] is None and detail["gen_tokens"] == 1  # the numbers stay

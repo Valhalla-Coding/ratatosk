@@ -39,6 +39,50 @@
         white-space:pre-wrap; overflow-wrap:anywhere; font:.85rem/1.5 ui-monospace, monospace; }
   .st-ok { color:var(--good); } .st-error, .st-unsupported { color:var(--bad); } .st-cancelled { color:var(--dim); }
   .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  :root { --blue:#6aa7ff; }
+  main { max-width:1040px; }
+  .sgrid { display:grid; grid-template-columns:10rem 1fr; gap:1.2rem; padding-bottom:5rem; } .sgrid > div { min-width:0; }
+  @media (max-width:760px) { .sgrid { grid-template-columns:1fr; } .toc { display:none; } }
+  .toc { position:sticky; top:1rem; align-self:start; display:grid; gap:.2rem; } .toc a { color:var(--dim); text-decoration:none; padding:.3rem .6rem; border-radius:5px; } .toc a:hover { color:var(--text); background:var(--panel); }
+  .lead { color:var(--dim); margin:0 0 .8rem; font-size:.9rem; } .small { font-size:.8rem; } p.small { margin:.4rem 0 0; }
+  .badge { font-size:.72rem; padding:.1rem .5rem; border-radius:99px; border:1px solid var(--line); color:var(--dim); white-space:nowrap; } .badge.service { color:var(--bad); border-color:rgba(224,100,92,.4); }
+  .frow { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.55rem 0; border-bottom:1px solid var(--line); } .frow:last-child { border:0; }
+  .frow .what b { display:block; font-weight:500; } .frow .what span { font-size:.85rem; } .frow input[type=number] { width:7rem; text-align:right; } .frow input[type=text] { max-width:22rem; }
+  .addm { display:flex; gap:.5rem; } .addm input { width:20rem; max-width:45vw; }
+  table.doors td:first-child { width:2.2rem; } td.act { color:var(--dim); font-size:.85rem; white-space:nowrap; }
+  .addr { display:inline-flex; white-space:nowrap; } .addr code { background:var(--bg); border-radius:4px 0 0 4px; padding:.2rem .5rem; display:inline-flex; align-items:center; }
+  .copy { display:inline-flex; align-items:center; padding:0 .5rem; border:0; border-radius:0 4px 4px 0; background:var(--line); color:var(--dim); border-left:1px solid var(--panel); cursor:pointer; } .copy:hover { color:var(--text); } .copy.done { background:var(--good); color:#08170f; }
+  tr.door.open td { border-bottom:0; } tr.detail td { background:var(--bg); } .panel { display:grid; gap:.7rem; padding:.4rem 0 .6rem; }
+  .panel label { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin:0; color:var(--text); font-size:.9rem; } .panel > label > :first-child { min-width:8rem; color:var(--dim); } .panel input[type=number], .panel select { width:auto; }
+  .panel fieldset { display:flex; gap:1rem; flex-wrap:wrap; border:1px solid var(--line); border-radius:6px; padding:.4rem .7rem; margin:0; } .panel legend { color:var(--dim); font-size:.8rem; padding:0 .3rem; } .panel fieldset label { gap:.3rem; } .panel fieldset input { width:auto; }
+  @media (max-width:760px) { table.doors tr.door td:nth-child(3), table.doors tr.door td:nth-child(5), table.doors th:nth-child(3), table.doors th:nth-child(5) { display:none; } .panel input[type=number], .panel select { max-width:60vw; } }
+  .panel button { justify-self:start; } .inl { display:inline-flex; align-items:baseline; gap:.4rem; } .panel .note { margin:0; font-size:.78rem; } .comfynote { color:var(--bad); }
+  .warnchip { font-size:.72rem; color:var(--accent); border:1px solid rgba(232,162,60,.4); border-radius:99px; padding:0 .5rem; }
+  .dot { display:inline-block; width:.55rem; height:.55rem; border-radius:50%; background:var(--line); margin-right:.45rem; } .dot.busy { background:var(--good); animation:pl 1.4s ease-in-out infinite; } @keyframes pl { 50% { opacity:.3; } }
+  @media (prefers-reduced-motion:reduce) { .dot.busy { animation:none; } }
+  #plist { list-style:none; margin:0; padding:0; display:grid; gap:.35rem; }
+  .pr, .else { display:flex; align-items:center; gap:.7rem; padding:.45rem .6rem; border:1px solid var(--line); border-radius:6px; background:var(--bg); } .else { border-style:dashed; color:var(--dim); } .else b { color:var(--text); }
+  .pr .what, .else .what { flex:1; } .grip { background:none; border:0; color:var(--dim); padding:0 .2rem; cursor:grab; font-size:1.2rem; line-height:1; } .pr.drag { opacity:.4; }
+  .pr.danger { border-color:var(--bad); background:rgba(224,100,92,.08); } .pr.danger .grip, .pr.danger b { color:var(--bad); }
+  .dng { margin:0; font-size:.78rem; color:var(--dim); white-space:nowrap; } .dng input { width:auto; } .pr.danger .dng { color:var(--bad); }
+  .rm { background:none; border:0; color:var(--dim); font-size:1.1rem; padding:0 .3rem; cursor:pointer; } .rm:hover { color:var(--bad); }
+  .addline { position:relative; margin-top:.6rem; }
+  #psug { position:absolute; left:0; right:0; z-index:5; margin:.2rem 0 0; padding:.25rem; list-style:none; background:var(--panel); border:1px solid var(--line); border-radius:6px; max-height:14rem; overflow:auto; box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  #psug li { padding:.4rem .6rem; border-radius:4px; cursor:pointer; display:flex; justify-content:space-between; gap:1rem; } #psug li:hover { background:var(--bg); } #psug small { color:var(--dim); }
+  .caps { display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.25rem; }
+  .cap { display:inline-flex; align-items:center; gap:.25rem; font-size:.72rem; padding:.05rem .5rem; border-radius:99px; border:1px solid; } .cap svg { width:12px; height:12px; }
+  .cap.vision { color:var(--accent); border-color:rgba(232,162,60,.4); } .cap.tools { color:var(--blue); border-color:rgba(106,167,255,.4); } .cap.reasoning { color:var(--good); border-color:rgba(92,192,138,.4); }
+  .chip { display:inline-block; background:var(--bg); border:1px solid var(--line); border-radius:99px; padding:.05rem .6rem; font-size:.8rem; margin:.1rem .2rem .1rem 0; color:var(--text); }
+  button.chip { font:inherit; font-size:.8rem; cursor:pointer; } button.chip.add { color:var(--accent); border-style:dashed; }
+  .chip .x { background:none; border:0; cursor:pointer; color:var(--bad); margin-left:.35rem; font-weight:700; padding:0; }
+  .trash { background:none; border:0; color:var(--bad); padding:.3rem; border-radius:5px; cursor:pointer; } .trash:hover { background:rgba(224,100,92,.12); }
+  button.danger, .danger { background:var(--bad); color:#1d0907; } .danger-text { color:var(--bad); }
+  dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:1rem 1.2rem; max-width:26rem; } dialog::backdrop { background:rgba(0,0,0,.6); } dialog h3 { margin:0 0 .3rem; font-size:1rem; }
+  dialog label.plain { color:var(--text); } #presets { margin:.5rem 0; } .dlgbtn { display:flex; gap:.5rem; justify-content:flex-end; margin-top:.8rem; }
+  .pick { display:block; margin:.2rem 0; color:var(--text); } .pick input { width:auto; } #find-out, #dl-box { margin:.4rem 0; } .dl { font-size:.9rem; }
+  details > summary { cursor:pointer; color:var(--dim); padding:.3rem 0; } #raw { min-height:14rem; }
+  .savebar { position:fixed; left:0; right:0; bottom:0; background:#101216; border-top:1px solid var(--line); padding:.7rem 1rem; display:flex; gap:.8rem; align-items:center; justify-content:center; flex-wrap:wrap; z-index:10; }
+  .savebar[hidden] { display:none; } .savebar .n { background:var(--accent); color:#1b1306; border-radius:99px; padding:.05rem .55rem; font-weight:600; font-size:.85rem; }
   #msg { margin-left:.8rem; } .ok { color:var(--good); } .err { color:var(--bad); } .dim { color:var(--dim); }
 </style>
 </head>
@@ -58,21 +102,43 @@
       <div class="dim" id="recent-note"></div></div>
   </section>
   <section id="settings">
-    <div class="card"><h2>Routes (listening port to backend)</h2><div id="routes"></div><button class="small" onclick="addRoute()">+ route</button>
-      <div class="dim">Port changes apply after the service restarts.</div></div>
-    <div class="card"><h2>General</h2><div id="fields"></div></div>
-    <div class="card"><h2>Models and aliases</h2><label>Model folders (JSON list of {"path", "label"})</label><textarea id="model_folders"></textarea>
-      <label>Aliases (JSON, name the client asks for → model id)</label><textarea id="aliases"></textarea>
-      <label>Vision files (JSON, model id → path of its mmproj file; only for a model with none beside it)</label><textarea id="mmproj_files"></textarea>
-      <label>Request defaults (JSON, model name → fields added when the client leaves them out, e.g. {"chat_template_kwargs": {"enable_thinking": false}})</label><textarea id="request_defaults"></textarea></div>
-    <button class="act" onclick="save()">Save</button><span id="msg"></span>
+    <div class="sgrid">
+      <nav class="toc" aria-label="Settings sections"><a href="#s-doors">Doors</a><a href="#s-priority">Priority</a><a href="#s-models">Models</a><a href="#s-gpu">GPU and memory</a><a href="#s-history">History</a><a href="#s-advanced">Advanced</a></nav>
+      <div>
+        <div class="card" id="s-doors"><h2>Doors</h2><p class="lead">Each door is a port other programs connect to. Give clients the address on its line. Open a door for its port, purpose and limits.</p>
+          <div class="scroll"><table class="doors"><thead><tr><th></th><th>Door</th><th>Status</th><th>Address for clients</th><th>Activity</th></tr></thead><tbody id="doors-body"></tbody></table></div>
+          <p><button type="button" class="chip add" id="add-door">+ Add a door</button> <span class="badge service">changing a port restarts the service</span></p></div>
+        <div class="card" id="s-priority"><h2>Priority</h2><p class="lead">Who goes first when the GPU is busy. The top line wins; drag a line to move it. Anything not listed waits in turn at the bottom.</p>
+          <ol id="plist"></ol>
+          <div class="addline"><input type="text" id="padd" placeholder="Add a client or a door: click for suggestions, or type an address" aria-label="Add a line" autocomplete="off"><ul id="psug" hidden></ul></div>
+          <p class="dim small">"Drop everything" cancels whatever is running the moment that line's request arrives. The cancelled request gets an error. Use it sparingly.</p></div>
+        <div class="card" id="s-models"><h2>Models</h2><p class="lead">Everything Ratatosk finds in your model folders. What a model can do is read from the model itself. The default answers when a client names a model that does not exist.</p>
+          <div class="scroll"><table class="models"><thead><tr><th>Default</th><th>Model</th><th>Size</th><th>Also answers to</th><th></th></tr></thead><tbody id="models-body"></tbody></table></div>
+          <div class="frow"><div class="what"><b>Add a model</b><span class="dim">Paste a Hugging Face link. Ratatosk lists the GGUF files and you pick one.</span></div><span class="addm"><input type="text" id="hf-url" placeholder="https://huggingface.co/owner/model" aria-label="Hugging Face link"><button class="act" type="button" id="find-btn">Find files</button></span></div>
+          <div id="find-out"></div><div id="dl-box"></div>
+          <details><summary>Model folders (<span id="folder-count">0</span>)</summary><div id="folder-list"></div><button type="button" class="chip add" id="add-folder">+ folder</button></details>
+          <dialog id="namedlg"><form method="dialog"><h3>Add a name for <span id="dlgmodel"></span></h3><p class="dim">Clients can ask for this model by any name you give it.</p>
+            <p class="dim small">Suggested from the model's own name:</p><div id="presets"></div>
+            <label class="plain">Or your own: <input type="text" id="custom" placeholder="Cindy"></label><div id="dlgerr" class="err" role="alert"></div>
+            <div class="dlgbtn"><button class="small" value="cancel">Cancel</button><button class="act" id="addname" value="ok">Add name</button></div></form></dialog>
+          <dialog id="deldlg"><form method="dialog"><h3>Delete <span id="delmodel"></span>?</h3><p>The file is removed from disk and cannot be brought back. Its names go with it.</p><div id="delerr" class="err" role="alert"></div>
+            <div class="dlgbtn"><button class="small" value="cancel">Cancel</button><button class="act danger" id="delok" value="ok">Delete file</button></div></form></dialog></div>
+        <div class="card" id="s-gpu"><h2>GPU and memory</h2><p class="lead">These trade speed for room.</p><div id="gpu-fields"></div>
+          <details><summary>Advanced: threads, context reserve, picture size</summary><div id="gpu-adv"></div></details></div>
+        <div class="card" id="s-history"><h2>History</h2><p class="lead">What the Now tab remembers.</p><div id="hist-fields"></div>
+          <p><button type="button" class="small" id="clear-btn">Clear all stored text now</button> <span class="dim" id="clear-msg"></span></p></div>
+        <div class="card" id="s-advanced"><h2>Advanced</h2>
+          <details><summary>Addresses and folders (leave alone unless you moved something)</summary><div id="adv-fields"></div></details>
+          <details><summary>Edit the raw settings</summary><p class="dim small">For anything not shown above, for example request_defaults. Apply puts it on the page; Save writes it.</p>
+            <textarea id="raw" spellcheck="false"></textarea><p><button type="button" class="small" id="raw-apply">Apply</button> <span class="err" id="raw-err"></span></p></details></div>
+      </div>
+    </div>
+    <div class="savebar" id="savebar" hidden><span class="n" id="save-count">0</span><span id="save-note"></span><button type="button" class="small" id="discard-btn">Discard</button><button type="button" class="act" id="save-btn">Save</button><span id="save-msg"></span></div>
   </section>
 </main>
+<script src="/static/settings.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-const NUM = ["ui_port","engine_port","max_tokens_cap","max_tokens_cap_plain","idle_minutes","reserve_gb","image_wait_seconds","threads","keep_content","image_max_tokens","reply_reserve"];
-const TXT = ["comfy_url","engine_dir","default_model","data_dir"];
-let routes = [];
 
 function show(name) {
   for (const s of ["now","settings"]) { $(s).classList.toggle("on", s === name); $("tab-" + s).classList.toggle("on", s === name); }
@@ -179,49 +245,11 @@ async function refresh() {
     $("queue").textContent = (d.queue.running ? "Running: " + d.queue.running : "Idle") + (d.queue.pending.length ? "   Waiting: " + d.queue.pending.join(", ") : "");
     $("comfy").textContent = d.comfy_pending === null ? "ComfyUI: not reachable" : "ComfyUI jobs: " + d.comfy_pending;
     setRecent(d.recent);
+    if (d.doors && typeof drawActivity === "function") drawActivity(d.doors);
   } catch (e) { $("queue").textContent = "Cannot reach Ratatosk"; }
 }
 
-function drawRoutes() {
-  const box = $("routes"); box.replaceChildren();
-  routes.forEach((r, i) => {
-    const row = document.createElement("div"); row.className = "row";
-    const port = Object.assign(document.createElement("input"), { type: "number", value: r.port });
-    const kind = Object.assign(document.createElement("select"), {}); ["llm","comfy"].forEach(k => kind.add(new Option(k, k, false, k === r.kind)));
-    const prof = Object.assign(document.createElement("select"), {}); ["plain","rp"].forEach(k => prof.add(new Option(k, k, false, k === r.profile)));
-    port.oninput = () => r.port = +port.value; kind.onchange = () => r.kind = kind.value; prof.onchange = () => r.profile = prof.value;
-    const del = Object.assign(document.createElement("button"), { className: "small", textContent: "remove" }); del.onclick = () => { routes.splice(i, 1); drawRoutes(); };
-    row.append(port, kind, prof, del); box.appendChild(row);
-  });
-}
-function addRoute() { routes.push({ port: 11436, kind: "llm", profile: "plain" }); drawRoutes(); }
-
-async function loadSettings() {
-  const s = await (await fetch("/api/settings")).json();
-  routes = s.routes; drawRoutes();
-  const box = $("fields"); box.replaceChildren();
-  for (const k of [...NUM, ...TXT]) {
-    const label = Object.assign(document.createElement("label"), { textContent: k, htmlFor: "f-" + k });
-    const input = Object.assign(document.createElement("input"), { id: "f-" + k, type: NUM.includes(k) ? "number" : "text", value: s[k] });
-    box.append(label, input);
-  }
-  $("model_folders").value = JSON.stringify(s.model_folders, null, 2);
-  $("aliases").value = JSON.stringify(s.aliases, null, 2);
-  $("mmproj_files").value = JSON.stringify(s.mmproj_files, null, 2);
-  $("request_defaults").value = JSON.stringify(s.request_defaults, null, 2);
-}
-
-async function save() {
-  const msg = $("msg"); msg.className = ""; msg.textContent = "";
-  try {
-    const body = { routes, model_folders: JSON.parse($("model_folders").value), aliases: JSON.parse($("aliases").value), mmproj_files: JSON.parse($("mmproj_files").value), request_defaults: JSON.parse($("request_defaults").value) };
-    for (const k of NUM) body[k] = +$("f-" + k).value;
-    for (const k of TXT) body[k] = $("f-" + k).value;
-    const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (res.ok) { msg.className = "ok"; msg.textContent = "Saved"; } else { msg.className = "err"; msg.textContent = (await res.json()).error; }
-  } catch (e) { msg.className = "err"; msg.textContent = "The JSON boxes must contain valid JSON"; }
-}
-
+initSettings();
 refresh(); setInterval(refresh, 2000);
 </script>
 </body>

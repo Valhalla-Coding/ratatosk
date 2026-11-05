@@ -482,6 +482,7 @@ async def test_without_a_priority_list_the_old_order_stands(rig, aiohttp_client)
 
 async def client_allowing(aiohttp_client, rig, **allow):
     route = Route(11434, "llm", "plain", allow={"vision": True, "reasoning": True, "tools": True, **allow})
+    rig.settings.routes = [route]  # doors come from the settings, as in the running service
     return await aiohttp_client(make_llm_app(route, rig.ctx), server_kwargs={"handler_cancellation": True})
 
 
@@ -515,3 +516,11 @@ def test_reasoning_off_is_left_alone_for_a_model_that_cannot_switch_it():
     assert apply_allow(body, {"reasoning": False}, can_reason=False) is None and "chat_template_kwargs" not in body
     assert apply_allow(body, {"reasoning": False}, can_reason=True) is None
     assert body["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+async def test_door_settings_saved_while_running_apply_to_the_next_request(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)  # the app was built with the old Route object
+    rig.settings.routes = [Route(11434, "llm", "plain", max_tokens=77, allow={"vision": False, "reasoning": True, "tools": True})]  # as a Settings save does
+    assert (await client.post("/v1/chat/completions", json=picture_request(1))).status == 400
+    await (await client.post("/v1/completions", json={"model": "alpha", "prompt": "hi", "max_tokens": 5000})).read()
+    assert sent_to_engine(rig, "/v1/completions")[-1]["max_tokens"] == 77

@@ -159,8 +159,13 @@ def _error(status: int, message: str) -> web.Response:
 
 
 def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
+    def live() -> Route:
+        """The door as the settings now describe it: a save replaces the Route objects, and this app keeps the old one.
+        A changed purpose needs a restart (this app was built for the old one), so only the same kind of door is taken over."""
+        return next((r for r in ctx.settings.routes if (r.port, r.kind, r.profile) == (route.port, route.kind, route.profile)), route)
+
     def rank_of(request: web.Request):
-        return rank_request(ctx.settings, route, request.remote, request.headers.get("User-Agent", ""))
+        return rank_request(ctx.settings, live(), request.remote, request.headers.get("User-Agent", ""))
 
     async def start_session(app):
         # No total timeout: a slow model needs minutes for one reply, and the default of 300 s would cut it off.
@@ -193,7 +198,7 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
                 body[key] = {**value, **body[key]}
             elif key not in body:
                 body[key] = value
-        refused = apply_allow(body, route.allow, getattr(model, "capabilities", {}).get("reasoning", True))
+        refused = apply_allow(body, live().allow, getattr(model, "capabilities", {}).get("reasoning", True))
         if refused:
             return _error(400, refused)
         pictures = _count_pictures(body)
@@ -201,7 +206,7 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
             return _error(400, f"model {model.id!r} cannot read pictures: it has no vision file "
                                "(put one beside it, or set it under mmproj_files in Settings)")
         asked = _asked_tokens(body)
-        capped = _capped_tokens(body, ctx.settings.max_tokens_for(route))
+        capped = _capped_tokens(body, ctx.settings.max_tokens_for(live()))
         for field in LENGTH_FIELDS:  # the cap goes into whatever this API calls the reply length, and into any other the client set
             if field in body or field == CAP_FIELD.get(request.path):
                 body[field] = capped

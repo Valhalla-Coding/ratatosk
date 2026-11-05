@@ -57,6 +57,10 @@ class Db:
         rows = self._con.execute("SELECT route, SUM(date(ts) = date('now')) AS today, MAX(ts) AS last_seen FROM requests GROUP BY route")
         return {r["route"]: {"today": r["today"], "last_seen": r["last_seen"]} for r in rows}
 
+    def clear_text(self) -> None:
+        self._con.execute("UPDATE requests SET prompt_text = NULL, reply_text = NULL")
+        self._con.commit()
+
     def get(self, request_id: int) -> dict | None:
         row = self._con.execute("SELECT * FROM requests WHERE id = ?", (request_id,)).fetchone()
         return dict(row) if row else None
