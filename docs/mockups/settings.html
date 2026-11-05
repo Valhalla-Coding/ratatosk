@@ -43,13 +43,22 @@
   .danger { background:var(--bad); color:#1d0907; } .addm { display:flex; gap:.5rem; } .addm input { width:20rem; max-width:50vw; }
   dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:1rem 1.2rem; max-width:26rem; } dialog::backdrop { background:rgba(0,0,0,.6); } dialog h3 { margin:0 0 .3rem; font-size:1rem; }
   #presets { margin:.5rem 0; } .dlgbtn { display:flex; gap:.5rem; justify-content:flex-end; margin-top:.8rem; } .small { font-size:.8rem; margin:.4rem 0 0; } .err { color:var(--bad); font-size:.8rem; min-height:1.1rem; }
+  #plist { list-style:none; margin:0; padding:0; display:grid; gap:.35rem; }
+  .pr, .else { display:flex; align-items:center; gap:.7rem; padding:.45rem .6rem; border:1px solid var(--line); border-radius:6px; background:var(--bg); } .else { border-style:dashed; color:var(--dim); } .else b { color:var(--text); }
+  .pr .what, .else .what { flex:1; } .grip { background:none; color:var(--dim); padding:0 .2rem; cursor:grab; font-size:1.2rem; line-height:1; } .pr.drag { opacity:.4; }
+  .pr.danger { border-color:var(--bad); background:rgba(224,100,92,.08); } .pr.danger .grip, .pr.danger b { color:var(--bad); }
+  .dng { font-size:.78rem; color:var(--dim); white-space:nowrap; } .pr.danger .dng { color:var(--bad); }
+  .rm { background:none; color:var(--dim); font-size:1.1rem; padding:0 .3rem; } .rm:hover { color:var(--bad); }
+  .addline { position:relative; margin-top:.6rem; } .addline input { width:100%; }
+  #psug { position:absolute; left:0; right:0; z-index:5; margin:.2rem 0 0; padding:.25rem; list-style:none; background:var(--panel); border:1px solid var(--line); border-radius:6px; max-height:14rem; overflow:auto; box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  #psug li { padding:.4rem .6rem; border-radius:4px; cursor:pointer; display:flex; justify-content:space-between; gap:1rem; } #psug li:hover, #psug li.on { background:var(--bg); } #psug small { color:var(--dim); }
   :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 </style>
 </head>
 <body>
 <header><h1>Ratatosk</h1><nav><span>Now</span><span class="on">Settings</span></nav><span class="tag">MOCKUP: sample data, nothing here is saved</span></header>
 <main>
-  <nav class="toc" aria-label="Sections"><a class="on" href="#doors">Doors</a><a href="#models">Models</a><a href="#replies">Replies</a><a href="#gpu">GPU and memory</a><a href="#history">History</a><a href="#advanced">Advanced</a></nav>
+  <nav class="toc" aria-label="Sections"><a class="on" href="#doors">Doors</a><a href="#priority">Priority</a><a href="#models">Models</a><a href="#replies">Replies</a><a href="#gpu">GPU and memory</a><a href="#history">History</a><a href="#advanced">Advanced</a></nav>
   <div>
     <section id="doors">
       <h2>Doors</h2><p class="lead">Each door is a port other programs connect to. Give clients the address in the last column.</p>
@@ -62,6 +71,19 @@
         <tr class="hint" hidden><td colspan="4"><div class="note"></div></td></tr>
       </tbody></table>
       <p><span class="chip add">+ Add a door</span> <span class="badge service">changing a port restarts the service</span></p>
+    </section>
+
+    <section id="priority">
+      <h2>Priority</h2><p class="lead">Who goes first when the GPU is busy. The top line wins; drag a line to move it. Anything not listed waits in turn at the bottom.</p>
+      <ol id="plist">
+        <li class="pr" data-kind="client"><button class="grip" type="button" aria-label="Move line (Alt+Up or Alt+Down)">&#10303;</button><span class="what"><b>SillyTavern</b> <span class="dim">192.168.1.12 &middot; node-fetch</span></span><label class="dng"><input type="checkbox"> Drop everything</label><button class="rm" type="button" aria-label="Remove line">&times;</button></li>
+        <li class="pr" data-kind="door"><button class="grip" type="button" aria-label="Move line (Alt+Up or Alt+Down)">&#10303;</button><span class="what"><b>Roleplay door</b> <span class="dim">port 11435</span></span><label class="dng"><input type="checkbox"> Drop everything</label><button class="rm" type="button" aria-label="Remove line">&times;</button></li>
+        <li class="pr" data-kind="door"><button class="grip" type="button" aria-label="Move line (Alt+Up or Alt+Down)">&#10303;</button><span class="what"><b>General text door</b> <span class="dim">port 11434</span></span><label class="dng"><input type="checkbox"> Drop everything</label><button class="rm" type="button" aria-label="Remove line">&times;</button></li>
+        <li class="pr" data-kind="door"><button class="grip" type="button" aria-label="Move line (Alt+Up or Alt+Down)">&#10303;</button><span class="what"><b>ComfyUI door</b> <span class="dim">port 8188</span></span><label class="dng"><input type="checkbox"> Drop everything</label><button class="rm" type="button" aria-label="Remove line">&times;</button></li>
+        <li class="else"><span class="what"><b>Everything else</b> <span class="dim">waits in turn, first come first served</span></span></li>
+      </ol>
+      <div class="addline"><input type="text" id="padd" placeholder="Add a client or door: type an address or a name" aria-label="Add a line" autocomplete="off"><ul id="psug" hidden></ul></div>
+      <p class="dim small">"Drop everything" cancels whatever is running the moment that line's request arrives. The cancelled request gets an error. Use it sparingly.</p>
     </section>
 
     <section id="models">
@@ -136,6 +158,32 @@ document.querySelector("table.models").addEventListener("click",e=>{const t=e.ta
 const box=document.getElementById("presets");const fill=()=>{box.replaceChildren(...cur.dataset.suggest.split("|").filter(n=>!taken(n)).map(n=>{const b=document.createElement("button");b.type="button";b.className="chip pre";b.textContent=n;b.onclick=()=>{err.textContent=add(n);if(!err.textContent)dlg.close();};return b;}));if(!box.children.length)box.textContent="Every suggestion is already in use.";};
 document.getElementById("addname").onclick=e=>{e.preventDefault();err.textContent=add(custom.value);if(!err.textContent)dlg.close();};
 document.getElementById("delok").onclick=()=>gone&&gone.remove();})();
+</script>
+<script>
+(()=>{const list=document.getElementById("plist"),inp=document.getElementById("padd"),sug=document.getElementById("psug");
+const recent=[["SillyTavern","192.168.1.12 \u00b7 node-fetch","2 min ago"],["Camera system","192.168.1.12 \u00b7 OpenAI/Python","5 min ago"],["Josef's PC","192.168.1.20 \u00b7 Mozilla/5.0","3 h ago"],["ComfyUI web page","192.168.1.20 \u00b7 Mozilla/5.0 (port 8188)","yesterday"]];
+const grip='<button class="grip" type="button" aria-label="Move line (Alt+Up or Alt+Down)">\u283f</button>';
+const used=()=>[...list.querySelectorAll(".pr .what")].map(w=>w.textContent);
+const settle=()=>{const rows=[...list.querySelectorAll(".pr")];[...rows.filter(r=>r.classList.contains("danger")),...rows.filter(r=>!r.classList.contains("danger"))].forEach(r=>list.insertBefore(r,list.querySelector(".else")));};
+const make=(name,detail)=>{const li=document.createElement("li");li.className="pr";li.innerHTML=grip+'<span class="what"><b></b> <span class="dim"></span></span><label class="dng"><input type="checkbox"> Drop everything</label><button class="rm" type="button" aria-label="Remove line">\u00d7</button>';
+  li.querySelector("b").textContent=name;li.querySelector(".dim").textContent=detail;list.insertBefore(li,list.querySelector(".else"));settle();};
+const show=()=>{const q=inp.value.toLowerCase();const hits=recent.filter(r=>!used().some(u=>u.startsWith(r[0]))&&(r[0]+r[1]).toLowerCase().includes(q));
+  sug.replaceChildren(...hits.map(r=>{const li=document.createElement("li");li.innerHTML="<span></span><small></small>";li.firstChild.textContent=r[0]+" \u00b7 "+r[1];li.lastChild.textContent=r[2];li.onmousedown=e=>{e.preventDefault();make(r[0],r[1]);inp.value="";sug.hidden=true;};return li;}));
+  sug.hidden=!hits.length;};
+inp.onfocus=inp.oninput=show;inp.onblur=()=>sug.hidden=true;
+inp.onkeydown=e=>{if(e.key==="Enter"&&inp.value.trim()){e.preventDefault();make(inp.value.trim(),"typed address");inp.value="";sug.hidden=true;}if(e.key==="Escape")sug.hidden=true;};
+list.addEventListener("change",e=>{if(e.target.type==="checkbox"){e.target.closest(".pr").classList.toggle("danger",e.target.checked);settle();}});
+list.addEventListener("click",e=>{if(e.target.classList.contains("rm"))e.target.closest(".pr").remove();});
+let dragged=null;
+list.addEventListener("mousedown",e=>{const li=e.target.closest(".pr");if(li)li.draggable=!!e.target.closest(".grip");});
+list.addEventListener("dragstart",e=>{dragged=e.target.closest(".pr");if(dragged){dragged.classList.add("drag");e.dataTransfer.effectAllowed="move";}});
+list.addEventListener("dragend",()=>{if(dragged)dragged.classList.remove("drag");dragged=null;settle();});
+list.addEventListener("dragover",e=>{if(!dragged)return;e.preventDefault();const over=e.target.closest("li");if(!over||over===dragged)return;const r=over.getBoundingClientRect();
+  if(over.classList.contains("else")){list.insertBefore(dragged,over);return;}list.insertBefore(dragged,e.clientY<r.top+r.height/2?over:over.nextSibling);});
+list.addEventListener("keydown",e=>{const li=e.target.closest(".pr");if(!li||!e.altKey||!e.target.classList.contains("grip"))return;
+  if(e.key==="ArrowUp"&&li.previousElementSibling)list.insertBefore(li,li.previousElementSibling);else if(e.key==="ArrowDown"&&li.nextElementSibling&&!li.nextElementSibling.classList.contains("else"))list.insertBefore(li.nextElementSibling,li);else return;
+  e.preventDefault();settle();e.target.focus();});
+})();
 </script>
 </body>
 </html>
