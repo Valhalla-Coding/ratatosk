@@ -42,7 +42,7 @@ async def rig(aiohttp_server, aiohttp_client):
     queue = GpuQueue()
     queue.start()
     engine = FakeEngine()
-    comfy = Comfy(settings.comfy_url, session, settle_poll=0.05, settle_quiet=0.2)
+    comfy = Comfy(settings.comfy_url, session, settle_poll=0.05)
     scheduler = Scheduler(settings, queue, engine, comfy, poll_seconds=0.05)
 
     class Rig:

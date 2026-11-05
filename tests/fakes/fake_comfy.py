@@ -2,7 +2,7 @@
 
 It copies two behaviours of the real one that a naive proxy trips over:
 - the origin-only middleware: a request whose Host is loopback and whose Origin names another host is refused (403);
-- /free only sets a flag, the memory is released a moment later (state.vram_free rises in steps)."""
+- /free only sets a flag, the memory is released a moment later (state.torch_held drops after release_delay)."""
 import asyncio
 import time
 from dataclasses import dataclass, field
@@ -21,8 +21,9 @@ class ComfyState:
     freed: list = field(default_factory=list)
     prompts: list = field(default_factory=list)
     prompt_times: list = field(default_factory=list)  # time.monotonic() when each /prompt arrived
-    vram_total: int = 8000
-    vram_free: int = 2000  # rises to vram_total in three steps after /free
+    vram_total: int = 8_000_000_000
+    torch_held: int = 5_000_000_000  # memory ComfyUI's torch holds; /free drops it to 32 MB after release_delay
+    release_delay: float = 0.1  # the real worker thread acts on /free a moment later, sometimes more than a second
 
 
 @web.middleware
@@ -42,10 +43,8 @@ def make_app(state: ComfyState) -> web.Application:
         state.freed.append(await request.json())
 
         async def release():
-            step = (state.vram_total - state.vram_free) // 3
-            for _ in range(3):
-                await asyncio.sleep(0.15)
-                state.vram_free += step
+            await asyncio.sleep(state.release_delay)
+            state.torch_held = 32_000_000
 
         asyncio.get_running_loop().create_task(release())
         return web.json_response({})
@@ -63,8 +62,9 @@ def make_app(state: ComfyState) -> web.Application:
         return web.json_response({"prompt_id": "fake"})
 
     async def stats(_):
-        return web.json_response({"system": {"fake": True},
-                                  "devices": [{"name": "fake", "vram_total": state.vram_total, "vram_free": state.vram_free}]})
+        return web.json_response({"system": {"fake": True}, "devices": [{
+            "name": "fake", "vram_total": state.vram_total, "vram_free": state.vram_total - state.torch_held - 500_000_000,
+            "torch_vram_total": state.torch_held, "torch_vram_free": 0}]})
 
     async def upload(request):
         return web.json_response({"size": len(await request.read())})
