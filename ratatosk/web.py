@@ -8,12 +8,13 @@ from typing import Awaitable, Callable
 from aiohttp import web
 
 from ratatosk.comfy import Comfy
+from ratatosk import modelstore
 from ratatosk.gateway_llm import AppContext
 from ratatosk.settings import Settings, save_settings, settings_from_dict
 
 INT_FIELDS = ("ui_port", "engine_port", "max_tokens_cap", "max_tokens_cap_plain", "idle_minutes", "reserve_gb", "image_wait_seconds", "threads",
               "keep_content", "image_max_tokens", "reply_reserve")
-STR_FIELDS = ("comfy_url", "engine_dir", "default_model", "data_dir")
+STR_FIELDS = ("comfy_url", "engine_dir", "default_model", "data_dir", "hf_base_url")
 PORT_FIELDS = ("ui_port", "engine_port")
 KINDS, PROFILES = ("llm", "comfy"), ("plain", "rp")
 FEATURES = ("vision", "reasoning", "tools")
@@ -211,4 +212,5 @@ def make_ui_app(ctx: AppContext, comfy: Comfy, settings_path: Path,
     app.router.add_get("/api/clients", clients)
     app.router.add_get("/api/settings", get_settings)
     app.router.add_put("/api/settings", put_settings)
+    modelstore.add_routes(app, ctx, settings_path)
     return app

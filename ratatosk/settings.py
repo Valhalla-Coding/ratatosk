@@ -27,6 +27,7 @@ def _default_routes() -> list[Route]:
 class Settings:
     routes: list[Route] = field(default_factory=_default_routes)
     ui_port: int = 5960
+    hf_base_url: str = "https://huggingface.co"  # where "add a model" looks; changed in tests
     engine_port: int = 8081
     comfy_url: str = "http://127.0.0.1:8189"
     engine_dir: str = field(default_factory=lambda: str(Path.home() / "ratatosk" / "engine"))
