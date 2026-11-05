@@ -139,7 +139,8 @@ def add_routes(app: web.Application, ctx: AppContext, settings_path: Path) -> No
             body = None
         repo, name = (body or {}).get("repo", ""), (body or {}).get("file", "")
         vision = (body or {}).get("vision") or None
-        if not (isinstance(repo, str) and REPO.match(repo) and isinstance(name, str) and FILE.match(name)
+        if not (isinstance(repo, str) and REPO.match(repo) and not {".", ".."} & set(repo.split("/"))
+                and isinstance(name, str) and FILE.match(name)
                 and (vision is None or (isinstance(vision, str) and FILE.match(vision)))):
             return _error(400, "send a repository (owner/model) and a plain .gguf file name")
         if not settings.model_folders:

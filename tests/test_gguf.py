@@ -49,3 +49,12 @@ def test_capabilities_come_from_the_template_and_the_vision_file():
     assert capabilities_from_template("{{ messages }}", False) == {"vision": False, "tools": False, "reasoning": False}
     assert capabilities_from_template(None, False) == {"vision": False, "tools": False, "reasoning": False}
     assert capabilities_from_template("<think>", False)["reasoning"] is True
+
+
+def test_hostile_headers_give_none_quickly_and_never_raise(tmp_path):
+    huge_fixed = struct.pack("<I", 9) + struct.pack("<I", 4) + struct.pack("<Q", 2**63)  # an array of 2**63 uint32
+    big_fixed = struct.pack("<I", 9) + struct.pack("<I", 4) + struct.pack("<Q", 2**45)
+    many_strings = struct.pack("<I", 9) + struct.pack("<I", 8) + struct.pack("<Q", 2**40)
+    deep = b"".join(struct.pack("<I", 9) + struct.pack("<I", 9) + struct.pack("<Q", 1) for _ in range(5000))
+    for n, value in enumerate((huge_fixed, big_fixed, many_strings, deep)):
+        assert read_chat_template(write(tmp_path, gguf([("x", value), ("tokenizer.chat_template", STRING("late"))]), f"h{n}.gguf")) is None

@@ -145,3 +145,10 @@ async def test_download_is_refused_when_the_disk_has_no_room_and_for_unsafe_name
     assert bad.status == 400
     bad = await rig.client.post("/api/models/download", json={"repo": "owner/repo", "file": "notes.txt"})
     assert bad.status == 400
+
+
+@pytest.mark.parametrize("repo", ["../gpt2", "a/..", "../..", "./x", "x/."])
+async def test_download_refuses_a_repo_name_that_climbs_out_of_the_model_folder(rig, repo):
+    resp = await rig.client.post("/api/models/download", json={"repo": repo, "file": "x.gguf"})
+    assert resp.status == 400
+    assert not (rig.models.parent / "gpt2").exists()

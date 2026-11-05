@@ -145,3 +145,34 @@ async def test_stop_kills_process(make_engine):
     assert proc.returncode is not None
     assert engine.loaded is None and engine.pid is None
     assert await engine.count_tokens("x") is None
+
+
+async def test_cancelling_stop_half_way_leaves_the_dying_process_tracked(make_engine):
+    import asyncio
+
+    class Dying:
+        pid, returncode = 99, None
+
+        def __init__(self):
+            self.gate = asyncio.Event()
+
+        def terminate(self):
+            pass
+
+        async def wait(self):
+            await self.gate.wait()
+            self.returncode = 0
+
+    engine = make_engine()
+    proc = engine._proc = Dying()
+    first = asyncio.create_task(engine.stop())
+    await asyncio.sleep(0.05)
+    first.cancel()  # a "drop everything" request cut the stop short
+    await asyncio.gather(first, return_exceptions=True)
+    assert engine._proc is proc  # still tracked, so the next start waits for it instead of racing it
+    second = asyncio.create_task(engine.stop())
+    await asyncio.sleep(0.05)
+    assert not second.done()  # it really waits for the old process
+    proc.gate.set()
+    await asyncio.wait_for(second, 2)
+    assert engine._proc is None

@@ -88,15 +88,18 @@ class Engine:
         raise EngineError(f"the engine was not healthy after {self._health_timeout:.0f} s")
 
     async def stop(self) -> None:
-        proc, self._proc, self.loaded, self._mmproj = self._proc, None, None, None
-        if proc is None or proc.returncode is not None:
+        proc, self.loaded, self._mmproj = self._proc, None, None
+        if proc is None:
             return
-        proc.terminate()
-        try:
-            await asyncio.wait_for(proc.wait(), 10)
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
+        if proc.returncode is None:
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), 10)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+        if self._proc is proc:  # still set if this stop was cancelled half way: the next one then waits for the process too
+            self._proc = None
 
     async def count_tokens(self, text: str) -> int | None:
         """Exact prompt length from the running engine, or None if it is not running."""

@@ -54,7 +54,7 @@ function changes() {
         const a = S.routes[i], b = o.routes[i];
         if (same(a, b)) continue;
         out.n++;
-        if (!a || !b || a.port !== b.port || a.kind !== b.kind) out.service = true;
+        if (!a || !b || a.port !== b.port || a.kind !== b.kind || a.profile !== b.profile) out.service = true;  // a new purpose is only picked up by a restart
       }
     } else if (!same(S[k], o[k])) {
       out.n++;
@@ -95,10 +95,12 @@ function doorRow(r, i) {
   if (!open) return [main];
 
   const portIn = el("input", { type: "number", value: r.port, ariaLabel: "Port" });
-  portIn.oninput = () => {
-    const old = r.port, now = +portIn.value;
-    if (S.priority) for (const line of S.priority) if (line.door === old) line.door = now;
-    r.port = now; refresh(); drawPriority(); updateBar();
+  let listed = r.port;  // the port the priority lines were last written with
+  portIn.oninput = () => { r.port = +portIn.value; refresh(); updateBar(); };
+  portIn.onchange = () => {  // only when the edit is finished, and never onto another door's port, so lines cannot merge
+    if (S.routes.some((x, n) => n !== i && x.port === r.port)) return;
+    if (S.priority) for (const line of S.priority) if (line.door === listed) line.door = r.port;
+    listed = r.port; drawPriority(); updateBar();
   };
   const purpose = el("select", { ariaLabel: "What it is for" }, PURPOSES.map((p, n) => new Option(p[0], n, false, n === purposeOf(r))));
   purpose.onchange = () => {
@@ -207,8 +209,9 @@ async function suggestions() {
   const out = [];
   try { CLIENTS = await (await fetch("/api/clients")).json(); } catch (e) { /* the list is only a convenience */ }
   for (const c of CLIENTS) {
-    if (have.some(l => l.client === c.client && (l.agent || "") === c.agent)) continue;
-    const line = { client: c.client, ...(c.agent ? { agent: c.agent } : {}) };
+    if (have.some(l => l.client === c.client && (l.agent || "") === c.agent.split(/[\s\/]/)[0])) continue;
+    const program = c.agent.split(/[\s\/]/)[0];  // the program name, not the whole version-stamped string, so a line outlives updates
+    const line = { client: c.client, ...(program ? { agent: program } : {}) };
     const text = `${lineName(line)} · ${c.client}`;
     if ((text + c.agent).toLowerCase().includes(q)) out.push([text, `${c.count} request${c.count === 1 ? "" : "s"} · ${ago(c.last_seen)}`, line]);
   }
