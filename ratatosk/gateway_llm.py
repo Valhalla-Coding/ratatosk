@@ -7,7 +7,7 @@ from typing import Callable
 import aiohttp
 from aiohttp import web
 
-from ratatosk.buckets import needed_ctx
+from ratatosk.buckets import BUCKETS, needed_ctx
 from ratatosk.db import Db
 from ratatosk.engine import Engine, EngineError
 from ratatosk.gpuqueue import P_LLM, P_RP
@@ -28,26 +28,52 @@ class AppContext:
     models_provider: Callable[[], list[Model]]
 
 
+PICTURE_TYPES = ("image_url", "input_image", "image")  # OpenAI chat, OpenAI Responses, Anthropic
+CAP_FIELD = {  # every generation path Ratatosk queues, and how that API spells its reply length
+    "/v1/chat/completions": "max_tokens", "/v1/completions": "max_tokens", "/v1/messages": "max_tokens",
+    "/v1/responses": "max_output_tokens", "/completion": "n_predict", "/infill": "n_predict",
+}
+LENGTH_FIELDS = ("max_tokens", "n_predict", "max_completion_tokens", "max_output_tokens")
+
+
+def _blocks_text(content) -> str:
+    """Text of one message: a string, or a list of typed blocks (the three chat APIs spell them alike)."""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    return " ".join("" if not isinstance(p, dict) else "[image]" if p.get("type") in PICTURE_TYPES else str(p.get("text", ""))
+                    for p in content)
+
+
 def _prompt_text(body: dict) -> str:
-    if "messages" in body:
-        parts = []
-        for message in body["messages"]:
-            content = message.get("content") if isinstance(message, dict) else None  # null for tool-call turns
-            if isinstance(content, list):
-                content = " ".join("[image]" if p.get("type") in ("image_url", "input_image") else str(p.get("text", ""))
-                                   for p in content if isinstance(p, dict))
-            parts.append(content if isinstance(content, str) else "")
-        return "\n".join(parts)
-    prompt = body.get("prompt", "")
-    return prompt if isinstance(prompt, str) else "\n".join(map(str, prompt))
+    """All the text a request carries, in any of the supported APIs; pictures appear as [image]."""
+    parts = [_blocks_text(body.get("instructions")), _blocks_text(body.get("system"))]  # Responses, Anthropic
+    for key in ("messages", "input"):
+        value = body.get(key)
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, list):
+            parts.extend(_blocks_text(m.get("content")) if isinstance(m, dict) else "" for m in value)
+    for key in ("prompt", "input_prefix", "input_suffix"):  # completions, llama.cpp native, infill
+        value = body.get(key)
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, list):
+            parts.extend(map(str, value))
+        elif isinstance(value, dict):  # native /completion with pictures: {"prompt_string": ..., "multimodal_data": [...]}
+            parts.append(str(value.get("prompt_string", "")))
+    return "\n".join(p for p in parts if p)
 
 
 def _count_pictures(body: dict) -> int:
-    messages = body.get("messages")
-    if not isinstance(messages, list):
-        return 0
-    return sum(1 for m in messages if isinstance(m, dict) and isinstance(m.get("content"), list)
-               for part in m["content"] if isinstance(part, dict) and part.get("type") in ("image_url", "input_image"))
+    count = 0
+    for key in ("messages", "input"):
+        for m in body.get(key) if isinstance(body.get(key), list) else []:
+            content = m.get("content") if isinstance(m, dict) else None
+            if isinstance(content, list):
+                count += sum(1 for p in content if isinstance(p, dict) and p.get("type") in PICTURE_TYPES)
+    return count
 
 
 def _asked_tokens(body: dict) -> int | None:
@@ -55,7 +81,7 @@ def _asked_tokens(body: dict) -> int | None:
     def positive(value):
         return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
 
-    return positive(body.get("max_tokens")) or positive(body.get("n_predict")) or positive(body.get("max_completion_tokens"))
+    return next((v for v in map(positive, (body.get(k) for k in LENGTH_FIELDS)) if v), None)
 
 
 def _capped_tokens(body: dict, cap: int) -> int:
@@ -87,13 +113,29 @@ def parse_reply(raw: bytes, content_type: str) -> tuple[str, int | None, float |
     for doc in docs:
         if not isinstance(doc, dict):
             continue
-        for choice in doc.get("choices") or []:
+        for choice in doc.get("choices") or []:  # OpenAI chat and completions
             piece = choice.get("text") or (choice.get("delta") or {}).get("content") or (choice.get("message") or {}).get("content")
             if isinstance(piece, str):
                 pieces.append(piece)
+        content = doc.get("content")  # llama.cpp native (a string) and Anthropic (a list of blocks)
+        if isinstance(content, str):
+            pieces.append(content)
+        elif isinstance(content, list):
+            pieces.extend(b["text"] for b in content if isinstance(b, dict) and isinstance(b.get("text"), str))
+        delta = doc.get("delta")  # Anthropic and Responses stream events
+        if isinstance(delta, dict) and isinstance(delta.get("text"), str):
+            pieces.append(delta["text"])
+        elif isinstance(delta, str):
+            pieces.append(delta)
+        for item in doc.get("output") or []:  # a plain Responses reply
+            for block in (item.get("content") or []) if isinstance(item, dict) else []:
+                if isinstance(block, dict) and isinstance(block.get("text"), str):
+                    pieces.append(block["text"])
         usage, timings = doc.get("usage") or usage, doc.get("timings") or timings
-    tokens = (usage or {}).get("completion_tokens") or (timings or {}).get("predicted_n")
-    return "".join(pieces), tokens, (timings or {}).get("predicted_per_second")
+    used, timed = usage or {}, timings or {}
+    native = next((d["tokens_predicted"] for d in reversed(docs) if isinstance(d, dict) and d.get("tokens_predicted")), None)
+    tokens = used.get("completion_tokens") or used.get("output_tokens") or timed.get("predicted_n") or native
+    return "".join(pieces), tokens, timed.get("predicted_per_second")
 
 
 def _error(status: int, message: str) -> web.Response:
@@ -140,10 +182,9 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
                                "(put one beside it, or set it under mmproj_files in Settings)")
         asked = _asked_tokens(body)
         capped = _capped_tokens(body, ctx.settings.max_tokens_cap if route.profile == "rp" else ctx.settings.max_tokens_cap_plain)
-        body["max_tokens"] = capped
-        body.pop("n_predict", None)
-        if "max_completion_tokens" in body:
-            body["max_completion_tokens"] = capped
+        for field in LENGTH_FIELDS:  # the cap goes into whatever this API calls the reply length, and into any other the client set
+            if field in body or field == CAP_FIELD.get(request.path):
+                body[field] = capped
         text = _prompt_text(body)
         prompt_tokens = await ctx.engine.count_tokens(text)
         if prompt_tokens is None:
@@ -194,10 +235,65 @@ def make_llm_app(route: Route, ctx: AppContext) -> web.Application:
                                max_tokens=capped, queue_seconds=waited, tokens_per_second=speed, error=error,
                                prompt_text=_clip(text), reply_text=reply or None)
 
+    def default_model():
+        return resolve("", ctx.models_provider(), ctx.settings.aliases, ctx.settings.default_model)
+
+    async def relay(request: web.Request, engine_url: str) -> web.Response:
+        """Hand a small request to the engine as it is, and return its answer as it is."""
+        body = await request.read() if request.can_read_body else None
+        headers = {"Content-Type": request.headers.get("Content-Type", "application/json")} if body else {}
+        async with request.app[SESSION].request(request.method, engine_url + request.path, data=body, headers=headers) as up:
+            return web.Response(body=await up.read(), status=up.status,
+                                headers={"Content-Type": up.headers.get("Content-Type", "application/json")})
+
+    async def with_engine(request: web.Request):
+        """Quick endpoints that need a loaded model (tokenize and so on): the default model is started if none is running."""
+        if ctx.engine.pid is not None:
+            return await relay(request, ctx.engine.url)
+        model = default_model()
+        if model is None:
+            return _error(503, "no model is loaded and no default model is set")
+        try:
+            return await ctx.scheduler.run_llm(priority, model, 1, lambda url: relay(request, url))
+        except EngineError as exc:
+            return _error(502, str(exc))
+
+    async def props(request: web.Request):
+        if ctx.engine.pid is not None:
+            return await relay(request, ctx.engine.url)
+        model = default_model()
+        if model is None:
+            return _error(503, "no default model is set")
+        return web.json_response({"default_generation_settings": {"n_ctx": BUCKETS[0], "params": {}}, "total_slots": 1,
+                                  "model_path": str(model.path), "modalities": {"vision": model.mmproj is not None},
+                                  "chat_template": "", "build_info": "ratatosk"})
+
+    async def health(_):
+        return web.json_response({"status": "ok"})  # Ratatosk is up; the model is loaded when a request needs it
+
+    async def engine_list(request: web.Request):
+        if ctx.engine.pid is not None:
+            return await relay(request, ctx.engine.url)
+        return web.json_response([])
+
+    async def unsupported(request: web.Request):
+        kind = "reranking" if "rerank" in request.path else "embedding" if "embed" in request.path else None
+        status, message = (501, f"no {kind} model is configured yet") if kind else (404, f"{request.path} is not supported by Ratatosk")
+        ctx.db.log_request(str(route.port), route.profile, "-", 0, 0, 0, 0.0, "unsupported", client=request.remote,
+                           user_agent=request.headers.get("User-Agent", "")[:200], path=request.path, stream=0, error=message)
+        return _error(status, message)
+
     app = web.Application(client_max_size=16 * 2**20)  # a long chat history is far bigger than aiohttp's 1 MiB default
     app.on_startup.append(start_session)
     app.on_cleanup.append(close_session)
     app.router.add_get("/v1/models", list_models)
-    app.router.add_post("/v1/completions", complete)
-    app.router.add_post("/v1/chat/completions", complete)
+    for path in CAP_FIELD:
+        app.router.add_post(path, complete)
+    for path in ("/tokenize", "/detokenize", "/apply-template"):
+        app.router.add_post(path, with_engine)
+    app.router.add_get("/props", props)
+    app.router.add_get("/health", health)
+    app.router.add_get("/slots", engine_list)
+    app.router.add_get("/lora-adapters", engine_list)
+    app.router.add_route("*", "/{tail:.*}", unsupported)  # anything else: a clear answer, and a line in the log
     return app

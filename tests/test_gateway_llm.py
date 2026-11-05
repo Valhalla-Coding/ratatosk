@@ -322,3 +322,113 @@ def test_parse_reply_reads_a_chat_reply_and_survives_garbage():
     raw = b'{"choices":[{"message":{"content":"hi"}}],"usage":{"completion_tokens":3}}'
     assert parse_reply(raw, "application/json") == ("hi", 3, None)
     assert parse_reply(b"not json at all", "application/json") == ("", None, None)
+
+
+def test_parse_reply_reads_the_native_anthropic_and_responses_shapes():
+    native = (b'data: {"content":"a","stop":false}\n\n'
+              b'data: {"content":"b","stop":true,"timings":{"predicted_n":2,"predicted_per_second":9.5}}\n\n')
+    assert parse_reply(native, "text/event-stream") == ("ab", 2, 9.5)
+    assert parse_reply(b'{"content":"hi","tokens_predicted":4}', "application/json") == ("hi", 4, None)
+    assert parse_reply(b'{"content":[{"type":"text","text":"hey"}],"usage":{"output_tokens":5}}', "application/json") == ("hey", 5, None)
+    stream = (b'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"x"}}\n\n'
+              b'event: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":7}}\n\n')
+    assert parse_reply(stream, "text/event-stream") == ("x", 7, None)
+    responses = b'{"output":[{"type":"message","content":[{"type":"output_text","text":"yo"}]}],"usage":{"output_tokens":2}}'
+    assert parse_reply(responses, "application/json") == ("yo", 2, None)
+
+
+def sent_to_engine(rig, path):
+    return [e["body"] for e in rig.log() if e["event"] == "request" and e["path"] == path]
+
+
+async def test_native_completion_is_queued_capped_and_logged(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)  # llama.cpp's own API, as SillyTavern's llama.cpp type uses it
+    resp = await client.post("/completion", json={"prompt": "hello there", "n_predict": 65536})
+    assert resp.status == 200 and (await resp.json())["content"] == "hello"
+    assert sent_to_engine(rig, "/completion")[0]["n_predict"] == 1024
+    row = rig.db.get(rig.db.recent(1)[0]["id"])
+    assert row["path"] == "/completion" and "hello there" in row["prompt_text"] and row["reply_text"] == "hello"
+    assert (row["gen_tokens"], row["status"]) == (1, "ok")
+
+
+async def test_native_completion_streams_through(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    text = await (await client.post("/completion", json={"prompt": "hi", "stream": True})).text()
+    assert '"content": "t0"' in text and '"stop": true' in text
+    row = rig.db.get(rig.db.recent(1)[0]["id"])
+    assert (row["reply_text"], row["gen_tokens"], row["tokens_per_second"]) == ("t0t1t2", 3, 25.0)
+
+
+async def test_infill_is_served_and_its_reply_length_capped_even_when_not_asked(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    resp = await client.post("/infill", json={"input_prefix": "def f(", "input_suffix": "):"})
+    assert resp.status == 200
+    assert sent_to_engine(rig, "/infill")[0]["n_predict"] == 1024
+    assert "def f(" in rig.db.get(rig.db.recent(1)[0]["id"])["prompt_text"]
+
+
+async def test_anthropic_messages_are_served_and_logged(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    body = {"model": "claude-sonnet-x", "max_tokens": 9999, "system": "be brief",
+            "messages": [{"role": "user", "content": [{"type": "text", "text": "hi there"}]}]}
+    resp = await client.post("/v1/messages", json=body)
+    assert resp.status == 200 and (await resp.json())["content"][0]["text"] == "hello"
+    assert sent_to_engine(rig, "/v1/messages")[0]["max_tokens"] == 1024  # and the unknown model name fell back to the default model
+    row = rig.db.get(rig.db.recent(1)[0]["id"])
+    assert "be brief" in row["prompt_text"] and "hi there" in row["prompt_text"]
+    assert (row["reply_text"], row["gen_tokens"]) == ("hello", 1)
+
+
+async def test_anthropic_image_blocks_count_as_pictures(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)  # the rig's model has no vision file
+    block = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AAAA"}}
+    body = {"model": "alpha", "max_tokens": 10, "messages": [{"role": "user", "content": [{"type": "text", "text": "what"}, block]}]}
+    resp = await client.post("/v1/messages", json=body)
+    assert resp.status == 400 and "cannot read pictures" in (await resp.json())["error"]
+
+
+async def test_responses_endpoint_is_served_and_capped(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    resp = await client.post("/v1/responses", json={"model": "alpha", "input": "hi there", "max_output_tokens": 99999})
+    assert resp.status == 200
+    assert sent_to_engine(rig, "/v1/responses")[0]["max_output_tokens"] == 1024
+    row = rig.db.get(rig.db.recent(1)[0]["id"])
+    assert "hi there" in row["prompt_text"] and row["reply_text"] == "hello"
+
+
+async def test_tokenize_starts_the_engine_when_there_is_none(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    assert rig.engine.pid is None
+    resp = await client.post("/tokenize", json={"content": "one two three"})
+    assert resp.status == 200 and (await resp.json())["tokens"] == [0, 0, 0]
+    pid = rig.engine.pid
+    assert pid is not None
+    await client.post("/tokenize", json={"content": "again"})
+    assert rig.engine.pid == pid  # the second call used the engine that was already running
+
+
+async def test_template_detokenize_and_slots_are_passed_on(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    assert (await (await client.post("/apply-template", json={"messages": []})).json())["prompt"] == "templated"
+    assert (await (await client.post("/detokenize", json={"tokens": [1]})).json())["content"] == "x"
+    assert await (await client.get("/slots")).json() == [{"id": 0}]
+
+
+async def test_props_and_health_answer_without_loading_a_model(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    props = await (await client.get("/props")).json()
+    assert props["default_generation_settings"]["n_ctx"] >= 8192 and props["model_path"].endswith("alpha.gguf")
+    assert await (await client.get("/health")).json() == {"status": "ok"}
+    assert rig.engine.pid is None  # neither woke the engine
+
+
+async def test_unsupported_paths_are_refused_clearly_and_show_up_in_the_log(rig, aiohttp_client):
+    client = await client_for(aiohttp_client, rig)
+    resp = await client.post("/v1/images/generations", json={"prompt": "cat"})
+    assert resp.status == 404 and "error" in await resp.json()
+    embeddings = await client.post("/v1/embeddings", json={"input": "hi"})
+    assert embeddings.status == 501 and "embedding" in (await embeddings.json())["error"]
+    newest, older = rig.db.recent(2)
+    assert (newest["status"], older["status"]) == ("unsupported", "unsupported")
+    assert older["path"] == "/v1/images/generations" and older["error"]  # nothing is silent any more
+    assert rig.engine.pid is None
