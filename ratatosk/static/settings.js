@@ -380,6 +380,7 @@ function drawAll() { drawDoors(); drawPriority(); drawModels(); drawFields(); up
 async function loadSettings() {
   S = await (await fetch("/api/settings")).json(); S0 = JSON.stringify(S);
   await loadModels(); drawAll(); pollDownloads();
+  if (window.tocSync) tocSync();  // the sections just got their real heights
 }
 
 async function clearText() {
@@ -435,5 +436,6 @@ function initToc() {
   });
   addEventListener("scroll", spy, { passive: true }); addEventListener("resize", () => { current = null; spy(); });
   window.tocSync = () => { current = null; spy(); };
+  new ResizeObserver(() => spy()).observe(document.body);  // sections fill in after the tab opens and the data loads, which moves them without a scroll
   spy();
 }
