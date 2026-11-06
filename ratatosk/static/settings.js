@@ -132,7 +132,6 @@ function doorRow(r, i) {
     el("label", {}, el("span", { textContent: "What it is for" }), purpose),
     comfy ? null : el("label", {}, el("span", { textContent: "Longest reply" }), el("span", { className: "inl" }, reply, " tokens ", words)),
     comfy ? null : feats,
-    comfy ? null : el("p", { className: "note dim", textContent: "A feature that is off is taken out of requests on this door. Pictures get an error, thinking is switched off, tools are removed." }),
     comfy ? el("p", { className: "note comfynote", textContent: "Apps expect ComfyUI on 8188. The real ComfyUI must use another port (now " + S.comfy_url.replace(/^.*:(\d+).*$/, "$1") + ", under Advanced)." }) : null,
     remove);
   return [main, el("tr", { className: "detail" }, el("td"), el("td", { colSpan: 4 }, panel))];
@@ -408,4 +407,33 @@ function initSettings() {
   document.getElementById("discard-btn").onclick = discard;
   document.getElementById("clear-btn").onclick = clearText;
   document.querySelectorAll("#namedlg button[value=cancel], #deldlg button[value=cancel]").forEach(b => b.onclick = () => b.closest("dialog").close());
+  document.querySelectorAll("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d) d.close(); }));  // a click on the backdrop lands on the dialog element itself
+  initToc();
+}
+
+// ---------- side navigation: smooth jump, and a highlight that slides to the section in view
+function initToc() {
+  const toc = document.querySelector(".toc"), links = [...toc.querySelectorAll("a")];
+  const calm = matchMedia("(prefers-reduced-motion: reduce)");
+  const pill = el("i", { className: "pill", ariaHidden: "true" }); toc.prepend(pill);
+  const sections = links.map(a => document.querySelector(a.getAttribute("href")));
+  let current = null;
+  const mark = a => {
+    if (a === current) return; current = a;
+    links.forEach(l => l.classList.toggle("on", l === a));
+    pill.style.transform = `translateY(${a.offsetTop}px)`; pill.style.height = a.offsetHeight + "px"; pill.style.opacity = 1;
+  };
+  const spy = () => {
+    if (!toc.offsetParent) return;  // the Settings tab is not showing, so nothing has a position yet
+    // the last section whose top has passed the upper third of the window
+    let k = 0; sections.forEach((s, n) => { if (s.getBoundingClientRect().top < innerHeight / 3) k = n; });
+    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 4) k = sections.length - 1;
+    mark(links[k]);
+  };
+  links.forEach((a, n) => a.onclick = e => {
+    e.preventDefault(); sections[n].scrollIntoView({ behavior: calm.matches ? "auto" : "smooth", block: "start" }); mark(a);
+  });
+  addEventListener("scroll", spy, { passive: true }); addEventListener("resize", () => { current = null; spy(); });
+  window.tocSync = () => { current = null; spy(); };
+  spy();
 }

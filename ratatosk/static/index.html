@@ -43,7 +43,10 @@
   main { max-width:1040px; }
   .sgrid { display:grid; grid-template-columns:10rem 1fr; gap:1.2rem; padding-bottom:5rem; } .sgrid > div { min-width:0; }
   @media (max-width:760px) { .sgrid { grid-template-columns:1fr; } .toc { display:none; } }
-  .toc { position:sticky; top:1rem; align-self:start; display:grid; gap:.2rem; } .toc a { color:var(--dim); text-decoration:none; padding:.3rem .6rem; border-radius:5px; } .toc a:hover { color:var(--text); background:var(--panel); }
+  .toc { position:sticky; top:1rem; align-self:start; display:grid; gap:.2rem; } .toc a { position:relative; color:var(--dim); text-decoration:none; padding:.3rem .6rem; border-radius:5px; transition:color .2s; } .toc a:hover, .toc a.on { color:var(--text); }
+  .toc .pill { position:absolute; left:0; right:0; top:0; border-radius:5px; background:var(--panel); border-left:2px solid var(--accent); opacity:0; transition:transform .25s cubic-bezier(.4,0,.2,1), height .25s, opacity .2s; pointer-events:none; }
+  #settings .card { scroll-margin-top:1rem; }
+  @media (prefers-reduced-motion:reduce) { .toc .pill, .toc a { transition:none; } }
   .lead { color:var(--dim); margin:0 0 .8rem; font-size:.9rem; } .small { font-size:.8rem; } p.small { margin:.4rem 0 0; }
   .badge { font-size:.72rem; padding:.1rem .5rem; border-radius:99px; border:1px solid var(--line); color:var(--dim); white-space:nowrap; } .badge.service { color:var(--bad); border-color:rgba(224,100,92,.4); }
   .frow { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.55rem 0; border-bottom:1px solid var(--line); } .frow:last-child { border:0; }
@@ -142,7 +145,7 @@ const $ = id => document.getElementById(id);
 
 function show(name) {
   for (const s of ["now","settings"]) { $(s).classList.toggle("on", s === name); $("tab-" + s).classList.toggle("on", s === name); }
-  if (name === "settings") loadSettings();
+  if (name === "settings") { loadSettings(); if (window.tocSync) requestAnimationFrame(tocSync); }
 }
 const CHEVRON = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const fmt = (v, digits = 1) => v === null || v === undefined ? "-" : Number(v).toFixed(digits);
