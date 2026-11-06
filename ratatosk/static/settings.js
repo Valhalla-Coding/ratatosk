@@ -428,7 +428,8 @@ function initToc() {
     if (!toc.offsetParent) return;  // the Settings tab is not showing, so nothing has a position yet
     // the last section whose top has passed the upper third of the window
     let k = 0; sections.forEach((s, n) => { if (s.getBoundingClientRect().top < innerHeight / 3) k = n; });
-    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 4) k = sections.length - 1;
+    if (scrollY < 40) k = 0;  // at the very top it is always the first section, whatever has or has not loaded yet
+    else if (innerHeight + scrollY >= document.documentElement.scrollHeight - 4) k = sections.length - 1;
     mark(links[k]);
   };
   links.forEach((a, n) => a.onclick = e => {
